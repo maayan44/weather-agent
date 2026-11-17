@@ -106,8 +106,11 @@ Done when: `npm run eval` prints pass/fail and a curl to `/chat` returns a valid
 
 ## 6. Session 2 - UI, deploy, polish
 
-1. Chat UI: input, message list, ranking and reasons shown
-2. Deploy: frontend on Vercel, connect it to the Railway backend deployed in session 1
+1. Chat UI: input, message list, ranking and reasons shown. DONE locally: mobile-first React + Vite + Tailwind + shadcn/ui,
+   Overview screen (needed the new `GET /ranking` endpoint), answer cards with confidence/assumptions/data gaps, copy button.
+   Apple guidelines (44 pt targets, 16 px text, safe areas, dark mode) checked by measurement in a 430x932 frame; 53 frontend tests.
+   Not yet seen on a real iPhone or in screenshots (Chrome screenshots timed out): the user will test on the phone.
+2. Deploy: frontend on Vercel, connect it to the Railway backend deployed in session 1. NEXT (needs a push first).
 3. Bonus if time allows: voice first, then alerts (scheduled rescoring that diffs against the last stored score)
 4. Final check: tests, bugs, refactors, issues, edge cases
 5. Export the full AI session transcript (mandatory deliverable) and add it to the repo
