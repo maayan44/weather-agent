@@ -1,4 +1,5 @@
 import type { AgentAnswer, ScoreMetric } from "@/api/types";
+import { describeHiddenRisks, EXPOSURE_LABEL, exposureLevel } from "./exposure";
 import { formatScore, formatUnit, hubLabel, metricLabel } from "./hazards";
 
 // Ranking entries arrive grouped by score; this keeps the groups in the order the model gave them.
@@ -29,6 +30,13 @@ export function asHubProfile(groups: RankingGroup[]): HubProfile | null {
   return { hubId, entries: [...overall, ...rest] };
 }
 
+// "- Wind: 79.2, High (1st of 10 hubs)": the score, how serious it is for a hazard, and where the hub stands.
+function profileLine(entry: AgentAnswer["ranking"][number]): string {
+  const level = entry.metric === "composite" ? "" : `, ${EXPOSURE_LABEL[exposureLevel(entry.score)]}`;
+  const rank = entry.note ? ` (${entry.note})` : "";
+  return `- ${metricLabel(entry.metric)}: ${formatScore(entry.score)}${level}${rank}`;
+}
+
 function section(title: string, lines: string[]): string[] {
   return lines.length > 0 ? ["", `${title}:`, ...lines.map((line) => `- ${line}`)] : [];
 }
@@ -38,7 +46,12 @@ export function formatAnswerAsText(answer: AgentAnswer): string {
   const groups = groupRanking(answer.ranking);
   const profile = asHubProfile(groups);
   const ranking = profile
-    ? ["", `${hubLabel(profile.hubId)} scores:`, ...profile.entries.map((entry) => `- ${metricLabel(entry.metric)}: ${formatScore(entry.score)}`)]
+    ? [
+        "",
+        `${hubLabel(profile.hubId)} scores:`,
+        ...profile.entries.map((entry) => profileLine(entry)),
+        ...(describeHiddenRisks(profile.entries) ? [describeHiddenRisks(profile.entries) as string] : []),
+      ]
     : groups.flatMap(({ metric, entries }) => [
         "",
         `${metricLabel(metric)} score:`,

@@ -6,6 +6,7 @@ import { ScoreBar } from "@/components/ScoreBar";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent } from "@/components/ui/card";
 import { asHubProfile, formatAnswerAsText, groupRanking } from "@/lib/answerText";
+import { describeHiddenRisks, EXPOSURE_LEGEND, exposureLevel } from "@/lib/exposure";
 import { formatScore, formatUnit, hubLabel, metricLabel } from "@/lib/hazards";
 
 function BulletList({ items }: { items: string[] }) {
@@ -53,8 +54,10 @@ export function AnswerCard({ answer }: { answer: AgentAnswer }) {
 
   const groups = groupRanking(answer.ranking);
   const profile = asHubProfile(groups);
-  const hubNotes = answer.ranking.filter((entry) => entry.note).map((entry) => `${hubLabel(entry.hub_id)}: ${entry.note}`);
+  // A profile shows each note (the hub's rank) right beside its bar, so it is not repeated under "Why".
+  const hubNotes = profile ? [] : answer.ranking.filter((entry) => entry.note).map((entry) => `${hubLabel(entry.hub_id)}: ${entry.note}`);
   const why = [...answer.reasoning, ...hubNotes];
+  const hiddenRiskNote = profile ? describeHiddenRisks(profile.entries) : null;
   // For a statistics question the numbers are the answer, so they are shown up front instead of folded away.
   const numbersAreTheAnswer = groups.length === 0 && answer.figures.length > 0;
 
@@ -68,8 +71,21 @@ export function AnswerCard({ answer }: { answer: AgentAnswer }) {
           <section aria-label={`${hubLabel(profile.hubId)} scores`} className="space-y-3">
             <h3 className="text-sm font-semibold text-muted-foreground">{hubLabel(profile.hubId)} scores (0-100, higher = more exposed)</h3>
             {profile.entries.map((entry) => (
-              <ScoreBar key={entry.metric} label={metricLabel(entry.metric)} value={entry.score} />
+              <ScoreBar
+                key={entry.metric}
+                label={metricLabel(entry.metric)}
+                value={entry.score}
+                detail={entry.note || undefined}
+                level={entry.metric === "composite" ? undefined : exposureLevel(entry.score)}
+              />
             ))}
+            {hiddenRiskNote && (
+              <p role="note" className="flex gap-2.5 rounded-xl bg-muted/60 p-3 text-sm leading-snug">
+                <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-link" />
+                {hiddenRiskNote}
+              </p>
+            )}
+            <p className="text-sm text-muted-foreground">Hazard levels: {EXPOSURE_LEGEND}</p>
           </section>
         ) : (
           groups.map(({ metric, entries }) => (
