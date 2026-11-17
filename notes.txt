@@ -1,0 +1,25 @@
+CORE:
+1. Deterministic scoring, formula decides the risk, not the LLM (LLM as an interface, gets the question, calls my functions and explains the result)
+2. Lang: TypeScript (reason: i have no problem to work in any language but i feel more comfrtable for this project to work in more familiar lang such as TS
+that my last big project has built with)
+3. No duplicated code, write function once and use it from everywhere that needs it.
+4. Short and simple comments - explain why something is done, not what the code already says (1/2 lines - no more).
+5. Clear names for vars
+6. Small files with clear one job like: routes, agent, scoring, data fetching.
+
+DECISIONS:
+1. Focus on 10 US hubs - Chicago, Minneapolis, Detroit, Denver, Dallas, Houston, Miami, Atlanta, Phoenix, LA…
+with cordinates and region stored in one config file
+2. Gather data from free public weather API such as Open-Meteo (last year till today) of snowfall, rain, wind, temprature (additional info about hurricanes and floods)
+
+Architecture:
+Backend API (broker) - receive the message, load conversation, calls the agent, return structured JSON.
+Frontend (Chat UI) - show ranking and reasons, message list (least invested part - token wise)
+Agent (LLM + tool calling) - Picks the tool, explains results, must output the JSON schema
+Scoring Engine - Deterministic code: sub-scores per hazard → composite 0–100.
+Data layer - Hub config, Open-Meteo client, caching
+Storage - SQLite - weather cache, conversation history, score history
+Eval Set + runner - Required deliverable
+Deploy: backend on railway and frontend on vercel
+
+bonus: scheduler/alers - only if time allow
