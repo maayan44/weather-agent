@@ -1,4 +1,5 @@
 import { AGENT_CONFIG } from "../config/agent";
+import { findProvenance } from "../scoring/provenance";
 import type { AgentAnswer } from "./schemas";
 
 type Figure = AgentAnswer["figures"][number];
@@ -126,7 +127,11 @@ export function groundAnswer(
   }
 
   // The model lists the most important numbers first, so the cut keeps those.
-  const figures = distinctFigures.slice(0, AGENT_CONFIG.maxFigures);
+  // Source and period come from the tool result that holds the value; anything the model wrote there is replaced.
+  const figures = distinctFigures.slice(0, AGENT_CONFIG.maxFigures).map(({ source: _source, data_period: _period, ...figure }) => {
+    const provenance = findProvenance(figure.value, figure.unit, toolOutputs);
+    return provenance ? { ...figure, ...provenance } : figure;
+  });
   if (figures.length < distinctFigures.length) {
     corrections.push(`kept the first ${AGENT_CONFIG.maxFigures} figures, trimmed ${distinctFigures.length - figures.length}`);
   }

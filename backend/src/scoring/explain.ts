@@ -1,8 +1,9 @@
-import { HAZARDS, type Hazard } from "../config/scoring";
+import { HAZARDS, type Hazard, type MetricId } from "../config/scoring";
 import { roundScore } from "./normalize";
 import type { HubRisk } from "./types";
 
 export interface Contribution {
+  id: MetricId;
   hazard: Hazard;
   metric: string;
   rawValue: number;
@@ -16,6 +17,7 @@ export function explainHubRisk(risk: HubRisk, topCount = 5): Contribution[] {
   return HAZARDS.flatMap((hazard) => {
     const subScore = risk.subScores[hazard];
     return subScore.metrics.map((metric) => ({
+      id: metric.id,
       hazard,
       metric: metric.label,
       rawValue: metric.rawValue,

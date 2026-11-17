@@ -19,26 +19,25 @@ interface ChatViewProps {
   composerRef: Ref<HTMLTextAreaElement>;
 }
 
-// An empty chat: the large input is the main thing on the screen, with example questions underneath.
+// An empty chat: one greeting, the large input, and two quiet example questions. Nothing else competes with the input.
 function EmptyState({ onSend, composerRef }: { onSend: (text: string) => void; composerRef: Ref<HTMLTextAreaElement> }) {
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col gap-5 pt-2">
-      <div className="space-y-2 text-center">
-        <div className="flex justify-center">
-          <Logo size={64} />
-        </div>
-        <h2 className="text-xl font-semibold">Which hubs need resilience investment?</h2>
-        <p className="text-base text-muted-foreground">
-          Ask in plain English. Every number comes from a fixed scoring formula on weather history, not from the AI's memory.
-        </p>
+    <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center gap-5 pb-[10vh]">
+      <div className="flex items-center justify-center gap-3">
+        <Logo size={36} />
+        <h2 className="text-2xl font-semibold tracking-tight">Hey, how can we help you today?</h2>
       </div>
 
       <Composer variant="hero" disabled={false} onSend={onSend} textareaRef={composerRef} />
 
       <div className="flex flex-col gap-2">
-        <p className="px-1 text-sm font-medium text-muted-foreground">Or try one of these</p>
         {STARTER_QUESTIONS.map((question) => (
-          <Button key={question} variant="outline" onClick={() => onSend(question)} className="h-auto min-h-11 justify-start py-3 text-left whitespace-normal">
+          <Button
+            key={question}
+            variant="ghost"
+            onClick={() => onSend(question)}
+            className="h-auto min-h-11 justify-start rounded-xl px-3 py-2.5 text-left font-normal whitespace-normal text-muted-foreground"
+          >
             {question}
           </Button>
         ))}
@@ -61,8 +60,8 @@ export function ChatView({ messages, isSending, isRestoring, onSend, onNewChat, 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ScreenHeader
-        title="Ask the agent"
-        subtitle="Answers come with confidence, assumptions and data gaps."
+        title="WeatherHub"
+        subtitle="Prioritize hub resilience before the storm hits."
         action={
           messages.length > 0 ? (
             <Button variant="ghost" size="icon" onClick={onNewChat} aria-label="New chat" className="shrink-0 text-link">
@@ -73,12 +72,12 @@ export function ChatView({ messages, isSending, isRestoring, onSend, onNewChat, 
       />
 
       <div role="log" aria-live="polite" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
-        <div className="mx-auto flex max-w-2xl flex-col gap-4">
+        <div className="mx-auto flex min-h-full max-w-2xl flex-col gap-4">
           {isRestoring && <Skeleton className="h-24 w-full rounded-xl" />}
           {isEmpty && <EmptyState onSend={onSend} composerRef={composerRef} />}
           {messages.map((message) => {
             if (message.role === "user") return <UserBubble key={message.id} text={message.text} />;
-            if (message.role === "agent") return <AnswerCard key={message.id} answer={message.answer} />;
+            if (message.role === "agent") return <AnswerCard key={message.id} answer={message.answer} toolsUsed={message.toolsUsed} />;
             const retryText = message.retryText;
             return <ErrorNotice key={message.id} text={message.text} onRetry={retryText ? () => onSend(retryText) : null} />;
           })}

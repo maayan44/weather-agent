@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { makeAnswer, RANKING, stubApi } from "@/test/fixtures";
@@ -67,6 +67,18 @@ describe("The agent is easy to find", () => {
     stubApi(ranking);
     render(<App />);
     expect(screen.getByRole("button", { name: "Ask the agent a question" }).className).toContain("lg:hidden");
+  });
+
+  it("keeps the empty chat minimal: app name, slogan, one greeting, the input and two examples", async () => {
+    stubApi(ranking);
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: "WeatherHub" })).toBeInTheDocument();
+    expect(screen.getByText("Prioritize hub resilience before the storm hits.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Hey, how can we help you today?" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveAttribute("placeholder", "Ask anything about weather risk, for example which hubs to prioritize…");
+    const chat = screen.getByRole("region", { name: "Chat with the agent" });
+    expect(within(chat).getAllByRole("button", { name: /\?$|\.$/ })).toHaveLength(2);
   });
 
   it("makes the input the main thing on an empty chat, then shrinks it once the conversation starts", async () => {

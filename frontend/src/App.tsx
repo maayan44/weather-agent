@@ -8,7 +8,7 @@ import { useChat } from "@/hooks/useChat";
 import { useViewport } from "@/hooks/useViewport";
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>("ask");
   const chat = useChat();
   const { height, keyboardOpen } = useViewport();
   const composerRef = useRef<HTMLTextAreaElement>(null);

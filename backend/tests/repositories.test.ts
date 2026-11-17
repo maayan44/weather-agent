@@ -1,5 +1,11 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import Database from "better-sqlite3";
 import { beforeEach, describe, expect, it } from "vitest";
+import { getTurns, saveTurn } from "../src/conversations/conversationStore";
 import { openDatabase, type Db } from "../src/data/db";
+import { makeAnswer } from "./helpers/scriptedModel";
 import { getHazardsFetchedAt, getHubHazards, saveHubHazards } from "../src/data/hazardRepository";
 import type { DailyWeather } from "../src/data/types";
 import { getDailyWeather, getLatestWeatherDate, saveDailyWeather } from "../src/data/weatherRepository";
@@ -58,5 +64,25 @@ describe("hazard repository", () => {
     expect(getHazardsFetchedAt(db)).toBeNull();
     saveHubHazards(db, [hazards], new Date("2026-11-17T00:00:00Z"));
     expect(getHazardsFetchedAt(db)?.toISOString()).toBe("2026-11-17T00:00:00.000Z");
+  });
+});
+
+describe("conversation store", () => {
+  it("upgrades a database made before tools were saved, keeping its old turns", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "weatherhub-"));
+    const file = path.join(dir, "old.db");
+    const old = new Database(file);
+    old.exec(`CREATE TABLE conversation_turns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id TEXT NOT NULL, user_message TEXT NOT NULL,
+      answer_json TEXT NOT NULL, created_at TEXT NOT NULL)`);
+    old.prepare("INSERT INTO conversation_turns (conversation_id, user_message, answer_json, created_at) VALUES (?, ?, ?, ?)")
+      .run("c1", "Old question", JSON.stringify(makeAnswer()), "2026-11-01T00:00:00Z");
+    old.close();
+
+    const db = openDatabase(file);
+    saveTurn(db, "c1", { userMessage: "New question", answer: makeAnswer(), toolsUsed: ["rank_hubs"] });
+    expect(getTurns(db, "c1").map((turn) => turn.toolsUsed)).toEqual([[], ["rank_hubs"]]);
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 });

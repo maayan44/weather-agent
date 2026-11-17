@@ -5,7 +5,7 @@ import { friendlyMessage, isRetryable } from "@/lib/friendlyError";
 
 export type ChatMessage =
   | { id: number; role: "user"; text: string }
-  | { id: number; role: "agent"; answer: AgentAnswer }
+  | { id: number; role: "agent"; answer: AgentAnswer; toolsUsed: string[] }
   // `retryText` is set when sending the same message again could succeed.
   | { id: number; role: "error"; text: string; retryText: string | null };
 
@@ -38,6 +38,8 @@ export function useChat() {
   const [storedId] = useState(readStoredId);
   const conversationId = useRef<string | null>(storedId);
   const [isRestoring, setIsRestoring] = useState(storedId !== null);
+  // A ref, not state: two quick taps can land before React re-renders, and both would still see isSending = false.
+  const inFlight = useRef(false);
 
   // After a page reload, bring the earlier conversation back from the server.
   useEffect(() => {
@@ -49,7 +51,7 @@ export function useChat() {
         setMessages(
           turns.flatMap((turn): ChatMessage[] => [
             { id: newId(), role: "user", text: turn.user_message },
-            { id: newId(), role: "agent", answer: turn.answer },
+            { id: newId(), role: "agent", answer: turn.answer, toolsUsed: turn.tools_used ?? [] },
           ]),
         ),
       )
@@ -62,17 +64,24 @@ export function useChat() {
 
   const send = useCallback(async (text: string) => {
     const message = text.trim();
-    if (!message) return;
+    // One question at a time, so answers always appear under the question they answer.
+    if (!message || inFlight.current) return;
 
+    inFlight.current = true;
     setIsSending(true);
-    // A retry replaces the failed attempt instead of stacking another copy of the question.
-    setMessages((current) => [...current.filter((item) => item.role !== "error"), { id: newId(), role: "user", text: message }]);
+    // A retry replaces the failed attempt (its question and the error) instead of stacking another copy of the question.
+    setMessages((current) => {
+      const last = current.at(-1);
+      const isRetry = last?.role === "error" && last.retryText === message;
+      const kept = isRetry ? current.slice(0, -2) : current.filter((item) => item.role !== "error");
+      return [...kept, { id: newId(), role: "user", text: message }];
+    });
 
     try {
       const response = await sendChat(message, conversationId.current);
       conversationId.current = response.conversation_id;
       writeStoredId(response.conversation_id);
-      setMessages((current) => [...current, { id: newId(), role: "agent", answer: response.answer }]);
+      setMessages((current) => [...current, { id: newId(), role: "agent", answer: response.answer, toolsUsed: response.meta?.tools_used ?? [] }]);
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === "not_found") {
         conversationId.current = null;
@@ -83,6 +92,7 @@ export function useChat() {
         { id: newId(), role: "error", text: friendlyMessage(error), retryText: isRetryable(error) ? message : null },
       ]);
     } finally {
+      inFlight.current = false;
       setIsSending(false);
     }
   }, []);

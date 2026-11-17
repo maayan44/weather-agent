@@ -18,6 +18,9 @@ export interface Figure {
   label: string;
   value: number;
   unit: string;
+  // Added by the backend's code from the tool result that holds the value; missing when it cannot tell.
+  source?: string;
+  data_period?: string;
 }
 
 export interface AgentAnswer {
@@ -34,11 +37,13 @@ export interface AgentAnswer {
 export interface ChatResponse {
   conversation_id: string;
   answer: AgentAnswer;
+  meta?: { tools_used?: string[] };
 }
 
 export interface ConversationResponse {
   conversation_id: string;
-  turns: { user_message: string; answer: AgentAnswer; created_at: string }[];
+  // tools_used is missing on turns saved before it was recorded.
+  turns: { user_message: string; answer: AgentAnswer; tools_used?: string[]; created_at: string }[];
 }
 
 export interface HubRanking {

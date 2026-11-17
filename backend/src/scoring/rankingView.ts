@@ -1,5 +1,6 @@
 import { getHubsByRegion, HUBS, type Region } from "../config/hubs";
 import { HAZARDS, type Hazard } from "../config/scoring";
+import { scoreProvenance } from "./provenance";
 import type { Db } from "../data/db";
 import { getAllHubRisks } from "./hubRiskService";
 import { rankHubs } from "./ranking";
@@ -15,6 +16,7 @@ export function buildRankingView(db: Db, region?: Region, hazard?: Hazard) {
     ranked_by: rankingKey,
     region: region ?? "all regions",
     data_window: risks.length > 0 ? `${risks[0].windowStart} to ${risks[0].windowEnd}` : null,
+    ...(risks.length > 0 ? scoreProvenance(risks[0].windowStart, risks[0].windowEnd) : {}),
     ranking: rankHubs(risks, rankingKey).map(({ rank, score, risk }) => ({
       rank,
       hub_id: risk.hubId,

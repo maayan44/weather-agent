@@ -61,7 +61,10 @@ export function formatAnswerAsText(answer: AgentAnswer): string {
   return [
     answer.answer,
     ...ranking,
-    ...section("Key numbers", answer.figures.map((figure) => `${figure.label}: ${formatScore(figure.value)} ${formatUnit(figure.value, figure.unit)}`.trim())),
+    ...section("Key numbers", answer.figures.map((figure) => {
+      const line = `${figure.label}: ${formatScore(figure.value)} ${formatUnit(figure.value, figure.unit)}`.trim();
+      return figure.source ? `${line} (${figure.source}, ${figure.data_period})` : line;
+    })),
     ...section("Why", answer.reasoning),
     ...section("Assumptions", answer.assumptions),
     ...section("Data gaps and limits", answer.data_gaps),

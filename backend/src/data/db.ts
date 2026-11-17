@@ -22,6 +22,7 @@ const SCHEMA = `
     conversation_id TEXT NOT NULL,
     user_message TEXT NOT NULL,
     answer_json TEXT NOT NULL,
+    tools_json TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_turns_conversation ON conversation_turns (conversation_id, id);
@@ -35,10 +36,19 @@ const SCHEMA = `
   );
 `;
 
+// A database made before a column existed (e.g. on the Railway volume) gets it added, keeping its rows.
+function addMissingColumns(db: Db): void {
+  const columns = db.prepare("PRAGMA table_info(conversation_turns)").all() as { name: string }[];
+  if (!columns.some((column) => column.name === "tools_json")) {
+    db.exec("ALTER TABLE conversation_turns ADD COLUMN tools_json TEXT NOT NULL DEFAULT '[]'");
+  }
+}
+
 export function openDatabase(filePath: string): Db {
   if (filePath !== ":memory:") fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const db = new Database(filePath);
   db.pragma("journal_mode = WAL");
   db.exec(SCHEMA);
+  addMissingColumns(db);
   return db;
 }

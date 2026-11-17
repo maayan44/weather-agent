@@ -15,7 +15,12 @@ export function createConversationsRouter(db: Db) {
 
     res.json({
       conversation_id: conversationId,
-      turns: turns.map((turn) => ({ user_message: turn.userMessage, answer: turn.answer, created_at: turn.createdAt })),
+      turns: turns.map((turn) => ({
+        user_message: turn.userMessage,
+        answer: turn.answer,
+        tools_used: turn.toolsUsed,
+        created_at: turn.createdAt,
+      })),
     });
   });
 

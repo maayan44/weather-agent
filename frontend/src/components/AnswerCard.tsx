@@ -1,4 +1,4 @@
-import { Info } from "lucide-react";
+import { Info, Wrench } from "lucide-react";
 import type { AgentAnswer } from "@/api/types";
 import { ConfidenceBadge } from "@/components/ConfidenceBadge";
 import { CopyButton } from "@/components/CopyButton";
@@ -24,7 +24,14 @@ function KeyNumbers({ figures }: { figures: AgentAnswer["figures"] }) {
     <dl className="divide-y divide-border">
       {figures.map((figure) => (
         <div key={figure.label} className="flex items-baseline justify-between gap-4 py-2.5">
-          <dt className="text-base">{figure.label}</dt>
+          <dt className="text-base">
+            {figure.label}
+            {figure.source && (
+              <span className="mt-0.5 block text-sm text-muted-foreground">
+                {figure.source} · {figure.data_period}
+              </span>
+            )}
+          </dt>
           <dd className="shrink-0 font-semibold tabular-nums">
             {formatScore(figure.value)} <span className="font-normal text-muted-foreground">{formatUnit(figure.value, figure.unit)}</span>
           </dd>
@@ -49,7 +56,19 @@ function OutOfScopeCard({ answer }: { answer: AgentAnswer }) {
   );
 }
 
-export function AnswerCard({ answer }: { answer: AgentAnswer }) {
+// Shows that the answer came from our tools, not only from the model: "Used: rank hubs, explain score".
+function ToolsUsed({ tools }: { tools: string[] }) {
+  const names = [...new Set(tools)].map((tool) => tool.replace(/_/g, " "));
+  if (names.length === 0) return null;
+  return (
+    <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+      <Wrench aria-hidden className="size-3.5 shrink-0" />
+      Used: {names.join(", ")}
+    </p>
+  );
+}
+
+export function AnswerCard({ answer, toolsUsed = [] }: { answer: AgentAnswer; toolsUsed?: string[] }) {
   if (!answer.in_scope) return <OutOfScopeCard answer={answer} />;
 
   const groups = groupRanking(answer.ranking);
@@ -101,6 +120,7 @@ export function AnswerCard({ answer }: { answer: AgentAnswer }) {
         {numbersAreTheAnswer && <KeyNumbers figures={answer.figures} />}
 
         <ConfidenceBadge confidence={answer.confidence} />
+        <ToolsUsed tools={toolsUsed} />
 
         <Accordion type="multiple" className="border-t">
           {why.length > 0 && (

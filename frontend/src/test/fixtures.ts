@@ -40,7 +40,8 @@ export const RANKING: RankingResponse = {
 };
 
 type Reply = { status?: number; body: unknown };
-type Route = (request: { body: any }) => Reply;
+// A route may answer later (a Promise), to test what happens while a request is still running.
+type Route = (request: { body: any }) => Reply | Promise<Reply>;
 
 // Replaces fetch with a fake backend. Routes match by path prefix; every call is recorded.
 export function stubApi(routes: Record<string, Route>) {
@@ -53,7 +54,7 @@ export function stubApi(routes: Record<string, Route>) {
     calls.push({ path, body });
 
     const key = Object.keys(routes).find((prefix) => path.startsWith(prefix));
-    const reply: Reply = key ? routes[key]({ body }) : { status: 404, body: { error: "not found", code: "not_found" } };
+    const reply: Reply = key ? await routes[key]({ body }) : { status: 404, body: { error: "not found", code: "not_found" } };
     return new Response(JSON.stringify(reply.body), { status: reply.status ?? 200, headers: { "content-type": "application/json" } });
   });
 

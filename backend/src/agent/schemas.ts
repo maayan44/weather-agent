@@ -62,4 +62,10 @@ export const agentAnswerSchema = z.object({
   data_gaps: z.array(z.string()).describe("Missing data, caveats and what the answer cannot tell"),
 });
 
-export type AgentAnswer = z.infer<typeof agentAnswerSchema>;
+// The answer after the code check: each figure may gain its source and period, copied by code from the tool result
+// that holds its value. Never part of what the model writes, so the model cannot get them wrong.
+export const checkedAnswerSchema = agentAnswerSchema.extend({
+  figures: z.array(figureSchema.extend({ source: z.string().optional(), data_period: z.string().optional() })),
+});
+
+export type AgentAnswer = z.infer<typeof checkedAnswerSchema>;

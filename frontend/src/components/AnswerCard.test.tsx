@@ -129,6 +129,26 @@ describe("AnswerCard", () => {
     expect(screen.getByText("A snow day is 1 inch or more.")).toBeInTheDocument();
   });
 
+  it("shows each number's source and period under it, and nothing when the backend could not tell", () => {
+    const figures = [
+      { label: "Snow days", value: 33, unit: "days", source: "Open-Meteo weather archive", data_period: "2025-01-01 to 2025-12-31" },
+      { label: "Other", value: 5, unit: "days" },
+    ];
+    render(<AnswerCard answer={makeAnswer({ answer: "Numbers.", figures })} />);
+    expect(screen.getByText("Open-Meteo weather archive · 2025-01-01 to 2025-12-31")).toBeInTheDocument();
+    expect(screen.getAllByText(/Open-Meteo/)).toHaveLength(1);
+  });
+
+  it("says which tools produced the answer, each named once", () => {
+    render(<AnswerCard answer={makeAnswer({ ranking: winterRanking })} toolsUsed={["rank_hubs", "explain_score", "rank_hubs"]} />);
+    expect(screen.getByText("Used: rank hubs, explain score")).toBeInTheDocument();
+  });
+
+  it("shows no tools line when no tool was called (e.g. a declined question)", () => {
+    render(<AnswerCard answer={makeAnswer({ ranking: winterRanking })} toolsUsed={[]} />);
+    expect(screen.queryByText(/^Used:/)).not.toBeInTheDocument();
+  });
+
   it("leaves out sections the answer does not have", () => {
     render(<AnswerCard answer={makeAnswer({ ranking: [winterRanking[1]] })} />);
     expect(screen.queryByRole("button", { name: "Why" })).not.toBeInTheDocument();

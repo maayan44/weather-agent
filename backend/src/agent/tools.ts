@@ -11,6 +11,7 @@ import { getAllHubRisks, getHubRisk } from "../scoring/hubRiskService";
 import { buildRankingView } from "../scoring/rankingView";
 import type { HubRisk } from "../scoring/types";
 import { computePercentOfDays, computeSnowfallTotal, resolvePeriod, type StatsPeriod } from "../scoring/weatherStats";
+import { metricProvenance, periodProvenance, scoreProvenance } from "../scoring/provenance";
 import { compareHubsInput, explainScoreInput, getHubRiskInput, getSnowfallTotalInput, getWeatherStatsInput, rankHubsInput } from "./schemas";
 
 export interface ToolContext {
@@ -63,6 +64,7 @@ function toHubRiskView(risk: HubRisk, rankAmongHubs: ReturnType<typeof loadHubRa
     hub_id: risk.hubId,
     hub: risk.hubName,
     region: risk.region,
+    ...scoreProvenance(risk.windowStart, risk.windowEnd),
     composite_score: risk.compositeScore,
     dominant_hazard: risk.dominantHazard,
     // 1 = most exposed of the hubs; equal scores share a rank.
@@ -80,6 +82,7 @@ function toHubRiskView(risk: HubRisk, rankAmongHubs: ReturnType<typeof loadHubRa
               value: roundMeasurement(metric.rawValue, metric.unit),
               unit: metric.unit,
               score: metric.score,
+              ...metricProvenance(metric.id, risk.windowStart, risk.windowEnd),
             })),
           },
         ];
@@ -118,6 +121,7 @@ export const AGENT_TOOLS: AgentTool[] = [
       const riskA = getHubRisk(db, requireHub(hub_a));
       const riskB = getHubRisk(db, requireHub(hub_b));
       return {
+        ...scoreProvenance(riskA.windowStart, riskA.windowEnd),
         hub_a: toHubRiskView(riskA, loadHubRanks(db, hub_a)),
         hub_b: toHubRiskView(riskB, loadHubRanks(db, hub_b)),
         per_hazard: HAZARDS.map((hazard) => ({
@@ -139,7 +143,7 @@ export const AGENT_TOOLS: AgentTool[] = [
     inputSchema: getWeatherStatsInput,
     run: ({ hub, condition, period }, context) => {
       const { hubName, span, weather } = loadPeriodWeather(context, hub, period);
-      return { hub: hubName, ...computePercentOfDays(weather, condition, period, span) };
+      return { hub: hubName, ...periodProvenance(span.startDate, span.endDate), ...computePercentOfDays(weather, condition, period, span) };
     },
   }),
 
@@ -150,7 +154,7 @@ export const AGENT_TOOLS: AgentTool[] = [
     inputSchema: getSnowfallTotalInput,
     run: ({ hub, period }, context) => {
       const { hubName, span, weather } = loadPeriodWeather(context, hub, period);
-      return { hub: hubName, ...computeSnowfallTotal(weather, period, span) };
+      return { hub: hubName, ...periodProvenance(span.startDate, span.endDate), ...computeSnowfallTotal(weather, period, span) };
     },
   }),
 
@@ -163,11 +167,16 @@ export const AGENT_TOOLS: AgentTool[] = [
       const risk = getHubRisk(db, requireHub(hub));
       return {
         hub: risk.hubName,
+        ...scoreProvenance(risk.windowStart, risk.windowEnd),
         composite_score: risk.compositeScore,
         dominant_hazard: risk.dominantHazard,
         rank_among_hubs: loadHubRanks(db, hub),
         hazard_scores: Object.fromEntries(HAZARDS.map((hazard) => [hazard, risk.subScores[hazard].score])),
-        top_contributors: explainHubRisk(risk).map((item) => ({ ...item, rawValue: roundMeasurement(item.rawValue, item.unit) })),
+        top_contributors: explainHubRisk(risk).map(({ id, ...item }) => ({
+          ...item,
+          rawValue: roundMeasurement(item.rawValue, item.unit),
+          ...metricProvenance(id, risk.windowStart, risk.windowEnd),
+        })),
         data_window: `${risk.windowStart} to ${risk.windowEnd}`,
         data_gaps: risk.dataGaps,
       };

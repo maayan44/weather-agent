@@ -63,6 +63,10 @@ describe("POST /chat", () => {
     expect(body.answer.in_scope).toBe(true);
     expect(body.meta.tools_used).toEqual(["rank_hubs"]);
     expect(body.meta.usage.inputTokens).toBe(200);
+
+    // Saved with the turn, so the "Used:" line comes back after a page reload.
+    const restored = await getJson(`${baseUrl}/conversations/${body.conversation_id}`);
+    expect(restored.body.turns[0].tools_used).toEqual(["rank_hubs"]);
   });
 
   it("remembers the conversation: the second message sees the first answer", async () => {

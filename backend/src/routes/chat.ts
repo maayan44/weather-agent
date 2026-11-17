@@ -44,7 +44,7 @@ export function createChatRouter({ db, callModel, limits }: ChatDeps) {
         throw new ApiError(404, "not_found", "Conversation not found. Send the message without conversation_id to start a new one.");
       }
       const run = await runAgent({ message, history, callModel, context: { db } });
-      saveTurn(db, conversationId, { userMessage: message, answer: run.answer });
+      saveTurn(db, conversationId, { userMessage: message, answer: run.answer, toolsUsed: run.toolCalls.map((call) => call.name) });
       return run;
     });
 
