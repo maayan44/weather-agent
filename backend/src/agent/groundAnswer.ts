@@ -9,6 +9,8 @@ const TOLERANCE = 0.051;
 const ISO_DATE = /\d{4}-\d{2}-\d{2}/g;
 // "February 28" or "Dec 1st": the day number is part of a date, not a data claim.
 const WORD_DATE = /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?\b/gi;
+// "13 May": the same, day first. Capitalized months only, so "45 may rise" still counts as a number.
+const DAY_FIRST_DATE = /\b\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sept?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/g;
 // A minus sign counts only when it does not join two numbers, so "0-100" reads as 0 and 100.
 const NUMBER = /(?<![\w.])-?\d[\d,]*(?:\.\d+)?|\d[\d,]*(?:\.\d+)?/g;
 
@@ -22,9 +24,9 @@ export interface GroundingResult {
   unverifiedTextNumbers: number[];
 }
 
-// Numbers written in text, ignoring dates such as 2025-11-13 or February 28.
+// Numbers written in text, ignoring dates such as 2025-11-13, February 28 or 13 May.
 export function extractNumbers(text: string): number[] {
-  const withoutDates = text.replace(ISO_DATE, " ").replace(WORD_DATE, " ");
+  const withoutDates = text.replace(ISO_DATE, " ").replace(WORD_DATE, " ").replace(DAY_FIRST_DATE, " ");
   return (withoutDates.match(NUMBER) ?? []).map((token) => Number(token.replace(/,/g, ""))).filter(Number.isFinite);
 }
 

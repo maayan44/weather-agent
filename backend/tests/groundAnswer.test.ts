@@ -166,6 +166,15 @@ describe("extractNumbers", () => {
   it("skips day numbers in dates written with month names", () => {
     expect(extractNumbers("Feb 28th and December 1, 2025 had 27 snow days")).toEqual([2025, 27]);
   });
+
+  // Seen in a live answer: "the past six months (13 May to 12 Nov 2026)" flagged 13 as unverified.
+  it("skips day numbers written before the month", () => {
+    expect(extractNumbers("13 May to 12 Nov 2026, and the 1st March had 27 snow days")).toEqual([2026, 27]);
+  });
+
+  it("still reads a number before the verb 'may'", () => {
+    expect(extractNumbers("a score of 45 may rise")).toEqual([45]);
+  });
 });
 
 describe("groundAnswer: ranking", () => {
