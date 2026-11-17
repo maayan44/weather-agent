@@ -174,6 +174,20 @@ describe("computeHubRisk", () => {
     expect(risk.dataGaps[0]).toContain("100 of 1095");
   });
 
+  it("flags a season that is missing many days, even when total coverage looks fine", () => {
+    // 3 years from Jan 1 with the first 60 days gone: 95% of all days remain (no overall warning),
+    // but Jan 1 to Feb 28 is 59 of the 270 winter days, so winter is under 90% covered.
+    const weather = makeWeather(fullYear).filter((_, index) => index >= 60);
+    const risk = computeHubRisk(phoenix, { weather, hazards: NO_HAZARDS });
+    expect(risk.dataGaps).toEqual([
+      "Winter is missing 59 of 270 days of weather data, so winter hazards may read lower than they are.",
+    ]);
+  });
+
+  it("adds no season warning when every season is covered", () => {
+    expect(computeHubRisk(phoenix, { weather: makeWeather(fullYear), hazards: NO_HAZARDS }).dataGaps).toEqual([]);
+  });
+
   it("is deterministic and ignores the order of the input days", () => {
     const weather = makeWeather(fullYear, (index) => ({ snowfallInches: index % 7, tempMaxF: 20 + (index % 90) }));
     const hazards = { ...NO_HAZARDS, hurricaneAnnualFrequency: 0.1 };

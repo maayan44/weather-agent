@@ -2,6 +2,7 @@ import type { AgentRunResult } from "../src/agent/runAgent";
 import type { AgentAnswer } from "../src/agent/schemas";
 import type { Db } from "../src/data/db";
 import { buildHubFacts, explanationTexts, findClaimProblemsInTexts } from "../src/agent/claimVerifier";
+import { AGENT_CONFIG } from "../src/config/agent";
 import { HUBS } from "../src/config/hubs";
 import { getAllHubRisks, getHubScore } from "../src/scoring/hubRiskService";
 import type { Check } from "./questions";
@@ -14,7 +15,7 @@ export interface CheckResult {
   skipped?: boolean;
 }
 
-const SCORE_TOLERANCE = 0.051;
+const SCORE_TOLERANCE = AGENT_CONFIG.numberTolerance;
 const TIE_WORDS = ["tie", "tied", "close", "similar", "roughly equal", "virtually", "effectively", "nearly"];
 
 type Field = Extract<Check, { kind: "mentions" }>["in"];

@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { ChatView } from "@/components/ChatView";
 import { Overview } from "@/components/Overview";
 import { TabBar, type Tab } from "@/components/TabBar";
+import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { useChat } from "@/hooks/useChat";
 import { useViewport } from "@/hooks/useViewport";
@@ -16,6 +17,11 @@ export default function App() {
   // Asking from the overview opens the chat and sends the question straight away.
   function ask(question: string) {
     setTab("ask");
+    // One question at a time; say so rather than drop the tap silently.
+    if (chat.isSending) {
+      toast("Wait for the current answer, then ask about this hub.");
+      return;
+    }
     void chat.send(question);
   }
 

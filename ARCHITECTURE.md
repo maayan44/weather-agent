@@ -19,10 +19,10 @@
 
 | Component | Job |
 |---|---|
-| Chat UI | Chat screen plus an Overview ranking. Talks only to the API. |
+| Chat UI | Chat first (one question at a time), plus an Overview ranking. Each answer shows the tools it used and the source of each number. Talks only to the API. |
 | Backend API | `POST /chat` loads the conversation, runs the agent, saves the turn. `GET /ranking` serves the Overview without an AI call. |
 | Agent | Claude chooses tools and explains their results. Its final answer must match a JSON schema. |
-| Answer check | Code checks the answer before it is sent: scores are replaced by the engine's values, numbers no tool returned trigger one retry and are then removed, and false rank claims are corrected. |
+| Answer check | Code checks the answer before it is sent: scores are replaced by the engine's values, numbers no tool returned trigger one retry and are then removed, false rank claims are corrected, and each number gets its source and period from the tool result that holds it. |
 | Scoring engine | A fixed formula: 5 hazard scores (winter, flood, hurricane, heat, wind) and one weighted composite, each 0-100. |
 | Ingestion | Downloads weather and FEMA data into SQLite on startup, then refreshes regularly. Scoring never calls a live API. |
 | Evals | 12 questions with checks, run on live Claude with `npm run eval`. |
@@ -67,7 +67,7 @@ frontend/
 |---|---|
 | `daily_weather` | One row per hub per day: snowfall, rain, max gust, max and min temperature |
 | `hub_hazards` | Per hub: FEMA hurricane, coastal flood and inland flood frequency |
-| `conversation_turns` | Each question and answer, by conversation id |
+| `conversation_turns` | Each question, answer and the tools used, by conversation id |
 
 Postgres would be the next step for many users or many hubs. It isn't needed here.
 
@@ -78,7 +78,7 @@ Postgres would be the next step for many users or many hubs. It isn't needed her
 | Hubs | 10 metro-center points, not real hub addresses | Results describe the metro area |
 | Weights and thresholds | Our judgment, not measured | Changing them changes the ranking. They are config. |
 | Weather | Open-Meteo archive, a coarse model rather than stations | Gusts likely understate extremes |
-| Window | Newest 3 years, averaged per year | Events rarer than 3 years are not seen. A day over a threshold counts the same however extreme it was. |
+| Window | Newest 3 years, averaged per year over the days available | Events rarer than 3 years are not seen. A day over a threshold counts the same however extreme it was. Missing data is flagged, including a season with many missing days. |
 | FEMA | County-level historical frequency, not a forecast. "Not applicable" is stored as 0 | Same value for the whole county |
 | Composite | A weighted average can hide one extreme hazard | Answers name the dominant hazard and flag high single hazards |
 | Scope | No forecasts, other hazards or other cities | The agent declines these |

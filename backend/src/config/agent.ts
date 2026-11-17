@@ -17,4 +17,7 @@ export const AGENT_CONFIG = {
   maxFigures: 6,
   // Scores this close are a tie: used by the prompt, the answer check and the evals.
   tiePoints: 3,
+  // Two numbers within this are the same number: tools round to 1-2 decimals, so allow for rounding and nothing more.
+  // Shared by the answer check, the source labels and the evals so they always agree on what "matches" means.
+  numberTolerance: 0.051,
 };

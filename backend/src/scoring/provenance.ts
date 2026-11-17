@@ -1,4 +1,6 @@
-import type { MetricId } from "../config/scoring";
+import { AGENT_CONFIG } from "../config/agent";
+import { MIN_DATA_COVERAGE, SCORING_WINDOW_DAYS, SCORING_WINDOW_YEARS, type MetricId } from "../config/scoring";
+import type { HubRisk } from "./types";
 
 // Where a number comes from and what time it covers. Tool results carry these next to their numbers, and code
 // copies them onto each figure of the answer, so the reader sees them without the model writing them.
@@ -15,17 +17,22 @@ export const SOURCES = {
 
 const FEMA_METRICS: ReadonlySet<MetricId> = new Set(["inlandFloodFrequency", "coastalFloodFrequency", "hurricaneFrequency"]);
 
-// Matches the rounding tolerance the answer check uses for figures.
-const TOLERANCE = 0.051;
+type Window = Pick<HubRisk, "windowStart" | "windowEnd" | "daysOfData">;
 
-export function scoreProvenance(windowStart: string, windowEnd: string): Provenance {
-  return { source: SOURCES.engine, data_period: `3-year average, ${windowStart} to ${windowEnd}` };
+// Says "3-year" only when the data really covers it; a hub still filling its cache states its true length.
+function describeWindow({ windowStart, windowEnd, daysOfData }: Window): string {
+  const length = daysOfData >= SCORING_WINDOW_DAYS * MIN_DATA_COVERAGE ? `${SCORING_WINDOW_YEARS}-year` : `${daysOfData}-day`;
+  return `${length} window, ${windowStart} to ${windowEnd}`;
 }
 
-export function metricProvenance(id: MetricId, windowStart: string, windowEnd: string): Provenance {
+export function scoreProvenance(risk: Window): Provenance {
+  return { source: SOURCES.engine, data_period: `average over the ${describeWindow(risk)}` };
+}
+
+export function metricProvenance(id: MetricId, risk: Window): Provenance {
   return FEMA_METRICS.has(id)
     ? { source: SOURCES.fema, data_period: "long-run yearly frequency" }
-    : { source: SOURCES.weather, data_period: `per-year average, ${windowStart} to ${windowEnd}` };
+    : { source: SOURCES.weather, data_period: `per-year average over the ${describeWindow(risk)}` };
 }
 
 export function periodProvenance(startDate: string, endDate: string): Provenance {
@@ -38,18 +45,33 @@ function ownProvenance(node: Record<string, unknown>): Provenance | null {
     : null;
 }
 
-interface Match {
-  provenance: Provenance | null;
-  // The unit stated next to the number, when there is one ("days/yr", "events/yr").
-  unit: string | null;
+// "inches per year" and "in/yr" are the same unit; the model often writes units out in words.
+// Every way of writing a 0-100 score ("points out of 100", "score (0-100)") becomes "score".
+// A note in brackets ("days (3.8% of 184 days)") is not part of the unit.
+function normalizeUnit(unit: string): string {
+  const text = unit.toLowerCase().replace(/\(.*?\)/g, "");
+  if (/score|point|\/ ?100|out of 100/.test(text)) return "score";
+  return text
+    .replace(/per year|a year|\/ ?year/g, "/yr")
+    .replace(/\binch(es)?\b/g, "in")
+    .replace(/\s+/g, "");
 }
 
-// The stats tools name their units in the field instead of a `unit` next to it: totalSnowfallInches, daysMatching.
-function unitFromKey(key: string): string | null {
+// The unit of the number stored under `key`. Only a measurement's own value takes the `unit` written beside it:
+// a score next to it ({ value: 20.3, unit: "days/yr", score: 45 }) is a 0-100 score, not 45 days a year.
+function unitOf(key: string, statedUnit: string | null): string | null {
+  if ((key === "value" || key === "rawValue") && statedUnit) return normalizeUnit(statedUnit);
+  if (/score/i.test(key)) return "score";
+  // The stats tools name their units in the field: totalSnowfallInches, daysMatching.
   if (/inches$/i.test(key)) return "in";
   if (key === "percentage") return "%";
   if (/^days|days$/i.test(key)) return "days";
   return null;
+}
+
+interface Match {
+  provenance: Provenance | null;
+  unit: string | null;
 }
 
 // Every place the value appears, each with the provenance of the nearest enclosing object that states one.
@@ -62,21 +84,12 @@ function collectMatches(value: number, node: unknown, inherited: Provenance | nu
     const statedUnit = typeof record.unit === "string" ? record.unit : null;
     for (const [key, item] of Object.entries(record)) {
       if (typeof item === "number") {
-        if (Math.abs(item - value) < TOLERANCE) found.push({ provenance: here, unit: statedUnit ?? unitFromKey(key) });
+        if (Math.abs(item - value) < AGENT_CONFIG.numberTolerance) found.push({ provenance: here, unit: unitOf(key, statedUnit) });
       } else {
         collectMatches(value, item, here, found);
       }
     }
   }
-}
-
-// "inches per year" and "in/yr" are the same unit; the model often writes units out in words.
-function normalizeUnit(unit: string): string {
-  return unit
-    .toLowerCase()
-    .replace(/per year|a year|\/ ?year/g, "/yr")
-    .replace(/\binch(es)?\b/g, "in")
-    .replace(/\s+/g, "");
 }
 
 function agreedProvenance(matches: Match[]): Provenance | null {
@@ -88,12 +101,14 @@ function agreedProvenance(matches: Match[]): Provenance | null {
   return allAgree ? first : null;
 }
 
-// The provenance of a figure's value, or null when it is unknown or ambiguous. When the same number appears in
-// places with different sources (a rank of 3 and 3 gust days), the unit decides; if it cannot, no label is
-// given, because a missing label is better than a wrong one.
+// The provenance of a figure: the places its value appears with the same unit, if they all agree. A figure whose
+// unit matches nothing gets no label, so a number the model mislabelled (a score written as "days/yr") is never
+// made to look sourced. A missing label is better than a wrong one.
 export function findProvenance(value: number, unit: string, toolOutputs: unknown[]): Provenance | null {
   const found: Match[] = [];
   toolOutputs.forEach((output) => collectMatches(value, output, null, found));
-  const sameUnit = found.filter((match) => match.unit !== null && normalizeUnit(match.unit) === normalizeUnit(unit));
-  return agreedProvenance(found) ?? agreedProvenance(sameUnit);
+  const wanted = normalizeUnit(unit);
+  // A figure with no unit at all can only be labelled when every place it appears agrees.
+  if (wanted === "") return agreedProvenance(found);
+  return agreedProvenance(found.filter((match) => match.unit === wanted));
 }

@@ -69,6 +69,20 @@ describe("POST /chat", () => {
     expect(restored.body.turns[0].tools_used).toEqual(["rank_hubs"]);
   });
 
+  it("lists only tools that returned data, not a call that failed", async () => {
+    const { baseUrl } = await start({
+      turns: [
+        toolUseTurn([
+          { id: "t1", name: "get_hub_risk", input: { hub: "atlantis" } },
+          { id: "t2", name: "rank_hubs", input: { hazard: "winter" } },
+        ]),
+        answerTurn(makeAnswer()),
+      ],
+    });
+    const { body } = await postJson(`${baseUrl}/chat`, { message: "Winter?" });
+    expect(body.meta.tools_used).toEqual(["rank_hubs"]);
+  });
+
   it("remembers the conversation: the second message sees the first answer", async () => {
     const { baseUrl, requests } = await start({
       turns: [answerTurn(makeAnswer({ answer: "First answer" })), answerTurn(makeAnswer({ answer: "Second answer" }))],

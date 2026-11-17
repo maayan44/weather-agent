@@ -5,8 +5,7 @@ import type { AgentAnswer } from "./schemas";
 type Figure = AgentAnswer["figures"][number];
 type RankingEntry = AgentAnswer["ranking"][number];
 
-// Scores and measurements are rounded to 1-2 decimals, so allow for rounding and nothing more.
-const TOLERANCE = 0.051;
+const TOLERANCE = AGENT_CONFIG.numberTolerance;
 const ISO_DATE = /\d{4}-\d{2}-\d{2}/g;
 // "February 28" or "Dec 1st": the day number is part of a date, not a data claim.
 const WORD_DATE = /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?\b/gi;
@@ -127,11 +126,11 @@ export function groundAnswer(
   }
 
   // The model lists the most important numbers first, so the cut keeps those.
-  // Source and period come from the tool result that holds the value; anything the model wrote there is replaced.
-  const figures = distinctFigures.slice(0, AGENT_CONFIG.maxFigures).map(({ source: _source, data_period: _period, ...figure }) => {
-    const provenance = findProvenance(figure.value, figure.unit, toolOutputs);
-    return provenance ? { ...figure, ...provenance } : figure;
-  });
+  // Source and period come from the tool result that holds the value. The model cannot write them: its answer
+  // format has no such fields.
+  const figures = distinctFigures
+    .slice(0, AGENT_CONFIG.maxFigures)
+    .map((figure) => ({ ...figure, ...findProvenance(figure.value, figure.unit, toolOutputs) }));
   if (figures.length < distinctFigures.length) {
     corrections.push(`kept the first ${AGENT_CONFIG.maxFigures} figures, trimmed ${distinctFigures.length - figures.length}`);
   }

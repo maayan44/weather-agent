@@ -69,6 +69,18 @@ describe("The agent is easy to find", () => {
     expect(screen.getByRole("button", { name: "Ask the agent a question" }).className).toContain("lg:hidden");
   });
 
+  it("says to wait, instead of silently dropping it, when a hub is tapped while an answer is coming", async () => {
+    const user = userEvent.setup();
+    const calls = stubApi({ ...ranking, "/chat": () => new Promise(() => {}) }); // never answers
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: STARTER }));
+    await user.click(await screen.findByRole("button", { name: /Chicago, rank 1/ }));
+
+    expect(await screen.findByText("Wait for the current answer, then ask about this hub.")).toBeInTheDocument();
+    expect(calls.filter((call) => call.path === "/chat")).toHaveLength(1);
+  });
+
   it("keeps the empty chat minimal: app name, slogan, one greeting, the input and two examples", async () => {
     stubApi(ranking);
     render(<App />);

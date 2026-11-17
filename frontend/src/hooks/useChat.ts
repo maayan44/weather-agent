@@ -40,22 +40,27 @@ export function useChat() {
   const [isRestoring, setIsRestoring] = useState(storedId !== null);
   // A ref, not state: two quick taps can land before React re-renders, and both would still see isSending = false.
   const inFlight = useRef(false);
+  // Bumped by New chat. A reply or restore that started before it belongs to the old chat and is dropped.
+  const chatGeneration = useRef(0);
 
   // After a page reload, bring the earlier conversation back from the server.
   useEffect(() => {
     const id = conversationId.current;
     if (!id) return;
+    const generation = chatGeneration.current;
 
     fetchConversation(id)
-      .then(({ turns }) =>
-        setMessages(
-          turns.flatMap((turn): ChatMessage[] => [
-            { id: newId(), role: "user", text: turn.user_message },
-            { id: newId(), role: "agent", answer: turn.answer, toolsUsed: turn.tools_used ?? [] },
-          ]),
-        ),
-      )
+      .then(({ turns }) => {
+        if (generation !== chatGeneration.current) return;
+        const restored = turns.flatMap((turn): ChatMessage[] => [
+          { id: newId(), role: "user", text: turn.user_message },
+          { id: newId(), role: "agent", answer: turn.answer, toolsUsed: turn.tools_used ?? [] },
+        ]);
+        // A question sent while this loaded belongs after the earlier turns, so it is kept, not overwritten.
+        setMessages((current) => [...restored, ...current]);
+      })
       .catch(() => {
+        if (generation !== chatGeneration.current) return;
         conversationId.current = null;
         writeStoredId(null);
       })
@@ -69,6 +74,8 @@ export function useChat() {
 
     inFlight.current = true;
     setIsSending(true);
+    const generation = chatGeneration.current;
+    const isCurrentChat = () => generation === chatGeneration.current;
     // A retry replaces the failed attempt (its question and the error) instead of stacking another copy of the question.
     setMessages((current) => {
       const last = current.at(-1);
@@ -79,10 +86,12 @@ export function useChat() {
 
     try {
       const response = await sendChat(message, conversationId.current);
+      if (!isCurrentChat()) return;
       conversationId.current = response.conversation_id;
       writeStoredId(response.conversation_id);
       setMessages((current) => [...current, { id: newId(), role: "agent", answer: response.answer, toolsUsed: response.meta?.tools_used ?? [] }]);
     } catch (error) {
+      if (!isCurrentChat()) return;
       if (error instanceof ApiRequestError && error.code === "not_found") {
         conversationId.current = null;
         writeStoredId(null);
@@ -92,12 +101,20 @@ export function useChat() {
         { id: newId(), role: "error", text: friendlyMessage(error), retryText: isRetryable(error) ? message : null },
       ]);
     } finally {
-      inFlight.current = false;
-      setIsSending(false);
+      // New chat already reset these, and a newer question may now be in flight.
+      if (isCurrentChat()) {
+        inFlight.current = false;
+        setIsSending(false);
+      }
     }
   }, []);
 
+  // Starts clean even while an answer is still coming: that answer is dropped when it arrives.
   const startNewChat = useCallback(() => {
+    chatGeneration.current++;
+    inFlight.current = false;
+    setIsSending(false);
+    setIsRestoring(false);
     conversationId.current = null;
     writeStoredId(null);
     setMessages([]);

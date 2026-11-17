@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { groundAnswer } from "../src/agent/groundAnswer";
-import type { AgentAnswer } from "../src/agent/schemas";
+import { agentAnswerSchema, type AgentAnswer } from "../src/agent/schemas";
 import { runTool } from "../src/agent/tools";
-import { findProvenance, SOURCES } from "../src/scoring/provenance";
+import { findProvenance, scoreProvenance, SOURCES } from "../src/scoring/provenance";
 import { createSeededDb } from "./helpers/seedDatabase";
 
 const engine = { source: SOURCES.engine, data_period: "3-year average, 2023-11-14 to 2026-11-12" };
@@ -37,6 +37,8 @@ describe("findProvenance", () => {
     expect(findProvenance(7, "days", [stats, yearly])).toEqual({ source: SOURCES.weather, data_period: "2026-05-13 to 2026-11-12" });
     expect(findProvenance(0, "inches", [stats, yearly])).toEqual({ source: SOURCES.weather, data_period: "2026-05-13 to 2026-11-12" });
     expect(findProvenance(7, "days/yr", [stats, yearly])).toEqual(weather);
+    // Seen in a live answer: the model added a note in brackets to the unit.
+    expect(findProvenance(7, "days (3.8% of 184 days)", [stats, yearly])).toEqual({ source: SOURCES.weather, data_period: "2026-05-13 to 2026-11-12" });
   });
 
   it("gives no label when even the unit cannot tell: better none than a wrong one", () => {
@@ -65,15 +67,17 @@ describe("the answer check attaches them to figures", () => {
     expect(gusts).toMatchObject(weather);
   });
 
-  it("replaces a source the model wrote itself, and removes one it cannot back up", () => {
-    const answer = answerWith([
-      { label: "Hurricanes", value: 0.18, unit: "events/yr", source: "my memory", data_period: "always" },
-      { label: "Ambiguous", value: 3, unit: "", source: "my memory", data_period: "always" },
-    ]);
-    const [hurricanes, ambiguous] = groundAnswer(answer, [hubRiskLike], () => 0).answer.figures;
-    expect(hurricanes).toMatchObject(fema);
-    expect(ambiguous.source).toBeUndefined();
-    expect(ambiguous.data_period).toBeUndefined();
+  it("never keeps a source the model wrote: its answer format drops the field before the check runs", () => {
+    const written = { ...answerWith([]), figures: [{ label: "Hurricanes", value: 0.18, unit: "events/yr", source: "my memory" }] };
+    expect(agentAnswerSchema.parse(written).figures[0]).not.toHaveProperty("source");
+  });
+
+  it("does not label a score the model wrote as a measurement (45 is a score, not 45 days a year)", () => {
+    const metricWithScore = { ...engine, metrics: [{ name: "Days with snow", value: 20.3, unit: "days/yr", score: 45, ...weather }] };
+    const [figure] = groundAnswer(answerWith([{ label: "Snow days", value: 45, unit: "days/yr" }]), [metricWithScore], () => 0).answer.figures;
+    expect(figure.source).toBeUndefined();
+    expect(findProvenance(45, "score (0-100)", [metricWithScore])).toEqual(weather);
+    expect(findProvenance(20.3, "days per year", [metricWithScore])).toEqual(weather);
   });
 });
 
@@ -83,7 +87,8 @@ describe("the tools state where their numbers come from", () => {
   it("get_hub_risk marks scores as the engine's, FEMA metrics as FEMA and weather metrics as Open-Meteo", () => {
     const output = runTool("get_hub_risk", { hub: "houston" }, { db }).output as typeof hubRiskLike;
     expect(output.source).toBe(SOURCES.engine);
-    expect(output.data_period).toMatch(/^3-year average, \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}$/);
+    // The seeded cache holds one year, and the label says so instead of claiming 3 years.
+    expect(output.data_period).toMatch(/^average over the 365-day window, \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}$/);
     expect(output.sub_scores.hurricane.metrics[0].source).toBe(SOURCES.fema);
     expect(output.sub_scores.wind.metrics[0].source).toBe(SOURCES.weather);
   });
@@ -93,5 +98,16 @@ describe("the tools state where their numbers come from", () => {
       .output as { source: string; data_period: string; startDate: string; endDate: string };
     expect(output.source).toBe(SOURCES.weather);
     expect(output.data_period).toBe(`${output.startDate} to ${output.endDate}`);
+  });
+});
+
+describe("the window wording follows the data", () => {
+  it("says 3-year only when the data covers it", () => {
+    expect(scoreProvenance({ windowStart: "2023-11-14", windowEnd: "2026-11-12", daysOfData: 1095 }).data_period).toBe(
+      "average over the 3-year window, 2023-11-14 to 2026-11-12",
+    );
+    expect(scoreProvenance({ windowStart: "2024-12-01", windowEnd: "2026-11-12", daysOfData: 712 }).data_period).toBe(
+      "average over the 712-day window, 2024-12-01 to 2026-11-12",
+    );
   });
 });

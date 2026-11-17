@@ -73,3 +73,46 @@ describe("useChat send guard", () => {
     expect(transcript(result.current.messages)).toEqual(["user: Question 1", "A: Worked."]);
   });
 });
+
+describe("useChat with New chat and restore", () => {
+  it("drops an answer that arrives after New chat, and keeps the new chat separate", async () => {
+    const held = heldReply();
+    const calls = stubApi({ "/chat": () => held.reply });
+    const { result } = renderHook(() => useChat());
+
+    act(() => void result.current.send("Old question"));
+    act(() => result.current.startNewChat());
+    expect(result.current.isSending).toBe(false);
+
+    await act(async () => held.release("Late answer"));
+    expect(transcript(result.current.messages)).toEqual([]);
+    expect(localStorage.getItem("weatherhub.conversationId")).toBeNull();
+
+    // The next question starts a fresh conversation, not the old one.
+    stubApi({ "/chat": () => ({ body: { conversation_id: "22222222-2222-4333-8444-555555555555", answer: makeAnswer({ answer: "New answer" }) } }) });
+    await act(() => result.current.send("New question"));
+    expect(transcript(result.current.messages)).toEqual(["user: New question", "A: New answer"]);
+    expect(calls.filter((call) => call.path === "/chat")).toHaveLength(1);
+  });
+
+  it("keeps a question sent while an earlier conversation is still loading, after the earlier turns", async () => {
+    localStorage.setItem("weatherhub.conversationId", CONVERSATION_ID);
+    let releaseRestore: () => void = () => {};
+    const restore = new Promise<{ body: unknown }>((resolve) => {
+      releaseRestore = () =>
+        resolve({ body: { conversation_id: CONVERSATION_ID, turns: [{ user_message: "Earlier", answer: makeAnswer({ answer: "Earlier answer" }), created_at: "x" }] } });
+    });
+    stubApi({
+      "/conversations/": () => restore,
+      "/chat": () => ({ body: { conversation_id: CONVERSATION_ID, answer: makeAnswer({ answer: "New answer" }) } }),
+    });
+    const { result } = renderHook(() => useChat());
+
+    await act(() => result.current.send("New question"));
+    await act(async () => releaseRestore());
+    await waitFor(() => expect(result.current.isRestoring).toBe(false));
+
+    expect(transcript(result.current.messages)).toEqual(["user: Earlier", "A: Earlier answer", "user: New question", "A: New answer"]);
+    localStorage.clear();
+  });
+});

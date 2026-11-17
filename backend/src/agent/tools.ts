@@ -64,7 +64,7 @@ function toHubRiskView(risk: HubRisk, rankAmongHubs: ReturnType<typeof loadHubRa
     hub_id: risk.hubId,
     hub: risk.hubName,
     region: risk.region,
-    ...scoreProvenance(risk.windowStart, risk.windowEnd),
+    ...scoreProvenance(risk),
     composite_score: risk.compositeScore,
     dominant_hazard: risk.dominantHazard,
     // 1 = most exposed of the hubs; equal scores share a rank.
@@ -82,7 +82,7 @@ function toHubRiskView(risk: HubRisk, rankAmongHubs: ReturnType<typeof loadHubRa
               value: roundMeasurement(metric.rawValue, metric.unit),
               unit: metric.unit,
               score: metric.score,
-              ...metricProvenance(metric.id, risk.windowStart, risk.windowEnd),
+              ...metricProvenance(metric.id, risk),
             })),
           },
         ];
@@ -121,7 +121,6 @@ export const AGENT_TOOLS: AgentTool[] = [
       const riskA = getHubRisk(db, requireHub(hub_a));
       const riskB = getHubRisk(db, requireHub(hub_b));
       return {
-        ...scoreProvenance(riskA.windowStart, riskA.windowEnd),
         hub_a: toHubRiskView(riskA, loadHubRanks(db, hub_a)),
         hub_b: toHubRiskView(riskB, loadHubRanks(db, hub_b)),
         per_hazard: HAZARDS.map((hazard) => ({
@@ -167,7 +166,7 @@ export const AGENT_TOOLS: AgentTool[] = [
       const risk = getHubRisk(db, requireHub(hub));
       return {
         hub: risk.hubName,
-        ...scoreProvenance(risk.windowStart, risk.windowEnd),
+        ...scoreProvenance(risk),
         composite_score: risk.compositeScore,
         dominant_hazard: risk.dominantHazard,
         rank_among_hubs: loadHubRanks(db, hub),
@@ -175,7 +174,7 @@ export const AGENT_TOOLS: AgentTool[] = [
         top_contributors: explainHubRisk(risk).map(({ id, ...item }) => ({
           ...item,
           rawValue: roundMeasurement(item.rawValue, item.unit),
-          ...metricProvenance(id, risk.windowStart, risk.windowEnd),
+          ...metricProvenance(id, risk),
         })),
         data_window: `${risk.windowStart} to ${risk.windowEnd}`,
         data_gaps: risk.dataGaps,

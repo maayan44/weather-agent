@@ -140,7 +140,7 @@ Done when: `npm run eval` prints pass/fail and a curl to `/chat` returns a valid
 - Skipped for now: the closed Overview sidebar (Overview stays pinned on wide screens).
 
 2. Deploy: frontend on Vercel, connect it to the Railway backend deployed in session 1. DONE: https://weather-agent-theta-ten.vercel.app
-   (checked in a real browser: 10 hubs load from Railway, no console errors). Still to do: set FRONTEND_ORIGIN on Railway to this address.
+   (checked in a real browser: 10 hubs load from Railway, no console errors). FRONTEND_ORIGIN on Railway is set to this address (checked live: other origins are not allowed).
 3. Bonus if time allows: voice first, then alerts (scheduled rescoring that diffs against the last stored score)
 4. Final check: tests, bugs, refactors, issues, edge cases
 5. Export the full AI session transcript (mandatory deliverable) and add it to the repo

@@ -38,23 +38,25 @@ export function createChatRouter({ db, callModel, limits }: ChatDeps) {
     // No id starts a new conversation; an id must belong to a conversation this server created.
     const conversationId = conversation_id ?? randomUUID();
 
-    const result = await withConversationLock(conversationId, async () => {
+    const { run, toolsUsed } = await withConversationLock(conversationId, async () => {
       const history = getTurns(db, conversationId, API_CONFIG.maxHistoryTurns);
       if (conversation_id && history.length === 0) {
         throw new ApiError(404, "not_found", "Conversation not found. Send the message without conversation_id to start a new one.");
       }
       const run = await runAgent({ message, history, callModel, context: { db } });
-      saveTurn(db, conversationId, { userMessage: message, answer: run.answer, toolsUsed: run.toolCalls.map((call) => call.name) });
-      return run;
+      // Only tools that returned data: a call that failed (an unknown hub, say) did not shape the answer.
+      const toolsUsed = run.toolCalls.filter((call) => call.output !== undefined).map((call) => call.name);
+      saveTurn(db, conversationId, { userMessage: message, answer: run.answer, toolsUsed });
+      return { run, toolsUsed };
     });
 
     res.json({
       conversation_id: conversationId,
-      answer: result.answer,
+      answer: run.answer,
       meta: {
-        tools_used: result.toolCalls.map((call) => call.name),
-        corrections: result.corrections,
-        usage: result.usage,
+        tools_used: toolsUsed,
+        corrections: run.corrections,
+        usage: run.usage,
       },
     });
   });
