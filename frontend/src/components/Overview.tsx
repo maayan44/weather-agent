@@ -1,7 +1,9 @@
 import { useState } from "react";
 import type { ScoreMetric } from "@/api/types";
+import { AskBar } from "@/components/AskBar";
 import { HazardFilter } from "@/components/HazardFilter";
 import { HubRow } from "@/components/HubRow";
+import { Logo } from "@/components/Logo";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -10,12 +12,13 @@ import { useRanking } from "@/hooks/useRanking";
 
 interface OverviewProps {
   onAsk: (question: string) => void;
+  onOpenAsk: () => void;
 }
 
 const HUB_COUNT = 10;
 
 // The client's core question at a glance: which hubs are most exposed, and to what. No AI call, so it loads instantly.
-export function Overview({ onAsk }: OverviewProps) {
+export function Overview({ onAsk, onOpenAsk }: OverviewProps) {
   const [metric, setMetric] = useState<ScoreMetric>("composite");
   const { state, retry } = useRanking(metric);
 
@@ -24,10 +27,11 @@ export function Overview({ onAsk }: OverviewProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <ScreenHeader title="Hub exposure" subtitle={subtitle} />
+      <ScreenHeader icon={<Logo />} title="Hub exposure" subtitle={subtitle} />
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
         <div className="space-y-3">
+          <AskBar onOpen={onOpenAsk} />
           <HazardFilter value={metric} onChange={setMetric} />
 
           {state.status === "loading" && (

@@ -185,9 +185,14 @@ Start the backend too (`cd backend && npm run dev`), so the Overview has data an
 | `npm run build` | Production build into `dist/` |
 
 ### What the screens show
-- **Overview**: all 10 hubs ranked, with each hub's main hazard. A filter ranks by winter, flood, hurricane, heat or wind. It calls no AI. Tapping a hub asks the agent why.
-- **Ask**: the chat. Each answer shows the ranking bars, a confidence level in words, and collapsible **Why**, **Assumptions** and **Data gaps and limits** sections, plus a **Copy answer** button. A declined question (another city, a forecast) is shown as a plain notice.
+- **Overview**: all 10 hubs ranked, with each hub's main hazard. An "Ask the agent about any hub…" bar sits at the top (phones), so the AI agent is visible on the first screen; tapping it opens the chat with the keyboard ready. A filter ranks by winter, flood, hurricane, heat or wind. It calls no AI. Tapping a hub asks the agent why.
+- **Ask**: the chat. On an empty chat the input is large and central (96 px, with example questions below); once a conversation starts it shrinks to a slim bar at the bottom. Each answer shows the ranking bars, a confidence level in words, and collapsible **Why**, **Assumptions** and **Data gaps and limits** sections, plus a **Copy answer** button. A declined question (another city, a forecast) is shown as a plain notice.
 - The conversation is remembered in the browser, so a reload brings it back. **New chat** starts fresh.
+
+### Icon and logo
+A white storm cloud with an amber warning bolt on a light blue gradient. `frontend/public/favicon.svg` is the single source;
+the PNG sizes (`apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `favicon-32.png`) are rendered from it, and `site.webmanifest`
+makes the app installable ("Add to Home Screen") with this icon. The same file is the logo shown in the app.
 
 ### Design rules followed
 Apple's interface guidelines: tap targets at least 44 pt, text at least 16 px (so iPhone Safari does not zoom), the system font, a bottom tab bar,

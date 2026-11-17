@@ -48,6 +48,64 @@ describe("Overview", () => {
   });
 });
 
+describe("The agent is easy to find", () => {
+  it("shows an Ask the agent bar on the Overview that opens the chat with the input ready, and sends nothing", async () => {
+    const user = userEvent.setup();
+    const calls = stubApi(ranking);
+    render(<App />);
+    await screen.findByRole("button", { name: /Chicago, rank 1/ });
+
+    await user.click(screen.getByRole("button", { name: "Ask the agent a question" }));
+
+    expect(screen.getByRole("button", { name: "Ask" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("textbox")).toHaveFocus();
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    expect(calls.some((call) => call.path === "/chat")).toBe(false); // opening the chat costs nothing
+  });
+
+  it("hides the Ask bar on wide screens, where the chat already sits beside the Overview", async () => {
+    stubApi(ranking);
+    render(<App />);
+    expect(screen.getByRole("button", { name: "Ask the agent a question" }).className).toContain("lg:hidden");
+  });
+
+  it("makes the input the main thing on an empty chat, then shrinks it once the conversation starts", async () => {
+    const user = userEvent.setup();
+    stubApi({ ...ranking, "/chat": chatReply("A first answer.") });
+    render(<App />);
+
+    expect(screen.getByRole("textbox")).toHaveAttribute("data-variant", "hero");
+
+    await user.click(screen.getByRole("button", { name: STARTER }));
+    await screen.findByText("A first answer.");
+    expect(screen.getByRole("textbox")).toHaveAttribute("data-variant", "compact");
+
+    await user.click(screen.getByRole("button", { name: "New chat" }));
+    expect(screen.getByRole("textbox")).toHaveAttribute("data-variant", "hero");
+  });
+
+  it("sends a question typed into the large input", async () => {
+    const user = userEvent.setup();
+    const calls = stubApi({ ...ranking, "/chat": chatReply("Typed answer.") });
+    render(<App />);
+
+    await user.type(screen.getByRole("textbox"), "Which hubs should we prioritize?{Enter}");
+    expect(await screen.findByText("Typed answer.")).toBeInTheDocument();
+    expect(calls.find((call) => call.path === "/chat")?.body).toEqual({ message: "Which hubs should we prioritize?" });
+  });
+
+  it("never shows two inputs at once", async () => {
+    const user = userEvent.setup();
+    stubApi({ ...ranking, "/chat": chatReply("Answer.") });
+    render(<App />);
+    expect(screen.getAllByRole("textbox")).toHaveLength(1);
+
+    await user.click(screen.getByRole("button", { name: STARTER }));
+    await screen.findByText("Answer.");
+    expect(screen.getAllByRole("textbox")).toHaveLength(1);
+  });
+});
+
 describe("Chat", () => {
   it("opens the chat and asks why when a hub is tapped", async () => {
     const user = userEvent.setup();

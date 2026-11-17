@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { createRef } from "react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { Composer } from "./Composer";
@@ -65,6 +66,49 @@ describe("Composer", () => {
     await user.click(screen.getByRole("textbox"));
     await user.paste("x".repeat(850));
     expect(screen.getByText("850 / 1000")).toBeInTheDocument();
+  });
+
+  it("comes in a large hero size for an empty chat and a slim compact size under a conversation", () => {
+    const { rerender } = render(<Composer variant="hero" disabled={false} onSend={vi.fn()} />);
+    const hero = screen.getByRole("textbox");
+    expect(hero).toHaveAttribute("data-variant", "hero");
+    expect(hero).toHaveAttribute("rows", "3");
+    expect(hero.className).toContain("min-h-24"); // 96 px, more than twice the compact bar
+
+    rerender(<Composer variant="compact" disabled={false} onSend={vi.fn()} />);
+    const compact = screen.getByRole("textbox");
+    expect(compact).toHaveAttribute("data-variant", "compact");
+    expect(compact.className).toContain("min-h-11"); // 44 px
+  });
+
+  it("follows the same rules in the hero size: blank cannot be sent, a message sends and clears", async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+    render(<Composer variant="hero" disabled={false} onSend={onSend} />);
+
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    await user.type(screen.getByRole("textbox"), "Which hubs should we prioritize?{Enter}");
+    expect(onSend).toHaveBeenCalledWith("Which hubs should we prioritize?");
+    expect(screen.getByRole("textbox")).toHaveValue("");
+  });
+
+  it("keeps the send button at least 44 px in the hero size", () => {
+    render(<Composer variant="hero" disabled={false} onSend={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Send" }).className).toMatch(/\bsize-12\b/);
+  });
+
+  it("shows the character counter near the limit in the hero size too", async () => {
+    const user = userEvent.setup();
+    render(<Composer variant="hero" disabled={false} onSend={vi.fn()} />);
+    await user.click(screen.getByRole("textbox"));
+    await user.paste("x".repeat(900));
+    expect(screen.getByText("900 / 1000")).toBeInTheDocument();
+  });
+
+  it("exposes its text box so another screen can focus it", () => {
+    const ref = createRef<HTMLTextAreaElement>();
+    render(<Composer disabled={false} onSend={vi.fn()} textareaRef={ref} />);
+    expect(ref.current).toBe(screen.getByRole("textbox"));
   });
 
   it("uses a 16 px or larger font so iPhone Safari does not zoom in", () => {

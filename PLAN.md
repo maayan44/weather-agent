@@ -115,6 +115,10 @@ Done when: `npm run eval` prints pass/fail and a curl to `/chat` returns a valid
    (2) prompt: a period under a year misses seasons, say so and give the 12-month score; (3) one hub = overall + 5 hazards, shown as ONE profile card;
    (4) no repeated scores in Key numbers (prompt + code drop), at most 6 figures; (5) say when the city is already one of our 10 hubs and that
    new-site decisions need cost/demand/access data. Evals now 12 (2 new, from this prompt): 12/12 pass on Haiku. 192 backend + 60 frontend tests.
+1c. UI feedback round (user): (a) app icon/logo/favicon (storm cloud + warning bolt, blue) with iPhone home-screen icon and manifest;
+   (b) the input was too small/hidden: large 96 px input on an empty chat that shrinks to a slim bar once chatting (A), plus an
+   "Ask the agent about any hub..." bar at the top of the Overview that opens the chat with the keyboard ready (B).
+   Measured at 430x932, 375x667 and 1280x800; 70 frontend tests. Uncommitted.
 2. Deploy: frontend on Vercel, connect it to the Railway backend deployed in session 1. DONE: https://weather-agent-theta-ten.vercel.app
    (checked in a real browser: 10 hubs load from Railway, no console errors). Still to do: set FRONTEND_ORIGIN on Railway to this address.
 3. Bonus if time allows: voice first, then alerts (scheduled rescoring that diffs against the last stored score)

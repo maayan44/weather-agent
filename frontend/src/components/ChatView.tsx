@@ -1,8 +1,9 @@
-import { MessagesSquare, SquarePen } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { SquarePen } from "lucide-react";
+import { useEffect, useRef, type Ref } from "react";
 import { AnswerCard } from "@/components/AnswerCard";
 import { ErrorNotice, UserBubble, WorkingIndicator } from "@/components/ChatBubbles";
 import { Composer } from "@/components/Composer";
+import { Logo } from "@/components/Logo";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,19 +16,27 @@ interface ChatViewProps {
   isRestoring: boolean;
   onSend: (text: string) => void;
   onNewChat: () => void;
+  composerRef: Ref<HTMLTextAreaElement>;
 }
 
-function EmptyState({ onSend }: { onSend: (text: string) => void }) {
+// An empty chat: the large input is the main thing on the screen, with example questions underneath.
+function EmptyState({ onSend, composerRef }: { onSend: (text: string) => void; composerRef: Ref<HTMLTextAreaElement> }) {
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-4 pt-4">
+    <div className="mx-auto flex w-full max-w-xl flex-col gap-5 pt-2">
       <div className="space-y-2 text-center">
-        <MessagesSquare aria-hidden className="mx-auto size-10 text-link" />
+        <div className="flex justify-center">
+          <Logo size={64} />
+        </div>
         <h2 className="text-xl font-semibold">Which hubs need resilience investment?</h2>
         <p className="text-base text-muted-foreground">
           Ask in plain English. Every number comes from a fixed scoring formula on weather history, not from the AI's memory.
         </p>
       </div>
+
+      <Composer variant="hero" disabled={false} onSend={onSend} textareaRef={composerRef} />
+
       <div className="flex flex-col gap-2">
+        <p className="px-1 text-sm font-medium text-muted-foreground">Or try one of these</p>
         {STARTER_QUESTIONS.map((question) => (
           <Button key={question} variant="outline" onClick={() => onSend(question)} className="h-auto min-h-11 justify-start py-3 text-left whitespace-normal">
             {question}
@@ -38,7 +47,7 @@ function EmptyState({ onSend }: { onSend: (text: string) => void }) {
   );
 }
 
-export function ChatView({ messages, isSending, isRestoring, onSend, onNewChat }: ChatViewProps) {
+export function ChatView({ messages, isSending, isRestoring, onSend, onNewChat, composerRef }: ChatViewProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   // Keep the newest message in view; respect the user's Reduce Motion setting.
@@ -66,7 +75,7 @@ export function ChatView({ messages, isSending, isRestoring, onSend, onNewChat }
       <div role="log" aria-live="polite" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
         <div className="mx-auto flex max-w-2xl flex-col gap-4">
           {isRestoring && <Skeleton className="h-24 w-full rounded-xl" />}
-          {isEmpty && <EmptyState onSend={onSend} />}
+          {isEmpty && <EmptyState onSend={onSend} composerRef={composerRef} />}
           {messages.map((message) => {
             if (message.role === "user") return <UserBubble key={message.id} text={message.text} />;
             if (message.role === "agent") return <AnswerCard key={message.id} answer={message.answer} />;
@@ -78,7 +87,8 @@ export function ChatView({ messages, isSending, isRestoring, onSend, onNewChat }
         </div>
       </div>
 
-      <Composer disabled={isSending} onSend={onSend} />
+      {/* Once a conversation is running, the input shrinks to a slim bar that stays out of the way. */}
+      {!isEmpty && <Composer variant="compact" disabled={isSending} onSend={onSend} textareaRef={composerRef} />}
     </div>
   );
 }
