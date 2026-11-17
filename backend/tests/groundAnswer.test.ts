@@ -16,11 +16,19 @@ function makeAnswer(overrides: Partial<AgentAnswer> = {}): AgentAnswer {
   };
 }
 
-const TRUE_SCORES: Record<string, number> = { "minneapolis:winter": 85, "chicago:winter": 59.9, "detroit:winter": 61.2 };
+const TRUE_SCORES: Record<string, number> = {
+  "minneapolis:winter": 85,
+  "chicago:winter": 59.9,
+  "detroit:winter": 61.2,
+  "miami:hurricane": 100,
+  "houston:hurricane": 61.2,
+  "houston:flood": 83.9,
+  "miami:flood": 46.5,
+};
 const lookup = (hubId: string, metric: string) => TRUE_SCORES[`${hubId}:${metric}`];
 
-function entry(hubId: string, score: number, rank: number) {
-  return { rank, hub_id: hubId as "chicago", metric: "winter" as const, score, note: "" };
+function entry(hubId: string, score: number, rank: number, metric: "winter" | "hurricane" | "flood" = "winter") {
+  return { rank, hub_id: hubId as "chicago", metric, score, note: "" };
 }
 
 describe("groundAnswer: figures", () => {
@@ -60,6 +68,41 @@ describe("groundAnswer: ranking", () => {
     const result = groundAnswer(answer, [], lookup);
     expect(result.answer.ranking[0].score).toBe(85);
     expect(result.corrections[0]).toContain("minneapolis winter score changed from 90 to 85");
+  });
+
+  it("ranks each hazard separately when one answer compares two hazards", () => {
+    // The model listed each hub once per hazard, interleaved, with ranks counted across both.
+    const answer = makeAnswer({
+      ranking: [
+        entry("miami", 100, 1, "hurricane"),
+        entry("houston", 83.9, 2, "flood"),
+        entry("houston", 61.2, 3, "hurricane"),
+        entry("miami", 46.5, 4, "flood"),
+      ],
+    });
+    const result = groundAnswer(answer, [], lookup);
+    expect(result.corrections).toEqual([]); // the order within each hazard was right
+    expect(result.answer.ranking.map((item) => [item.metric, item.hub_id, item.rank])).toEqual([
+      ["hurricane", "miami", 1],
+      ["hurricane", "houston", 2],
+      ["flood", "houston", 1],
+      ["flood", "miami", 2],
+    ]);
+  });
+
+  it("corrects a wrong order inside one hazard without touching the other", () => {
+    const answer = makeAnswer({
+      ranking: [
+        entry("houston", 61.2, 1, "hurricane"),
+        entry("miami", 100, 2, "hurricane"),
+        entry("houston", 83.9, 1, "flood"),
+        entry("miami", 46.5, 2, "flood"),
+      ],
+    });
+    const result = groundAnswer(answer, [], lookup);
+    expect(result.corrections).toEqual(["ranking order was rebuilt from the true scores"]);
+    expect(result.answer.ranking.filter((item) => item.metric === "hurricane").map((item) => item.hub_id)).toEqual(["miami", "houston"]);
+    expect(result.answer.ranking.filter((item) => item.metric === "flood").map((item) => item.hub_id)).toEqual(["houston", "miami"]);
   });
 
   it("rebuilds the order and ranks when the model got the order wrong", () => {

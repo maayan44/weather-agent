@@ -21,7 +21,12 @@ function collectNumbers(value: unknown, found: number[] = []): number[] {
   return found;
 }
 
+function hubOrder(entries: RankingEntry[]): string {
+  return entries.map((entry) => entry.hub_id).join(",");
+}
+
 // The engine is the source of truth for scores: wrong ones are overwritten, and the order is rebuilt from them.
+// A comparison across hazards lists each hub once per hazard, so entries are ranked within their own hazard.
 function groundRanking(
   ranking: RankingEntry[],
   lookupScore: (hubId: string, metric: RankingEntry["metric"]) => number,
@@ -34,11 +39,19 @@ function groundRanking(
     return { ...entry, score: trueScore };
   });
 
-  const sorted = [...corrected].sort((a, b) => b.score - a.score).map((entry, index) => ({ ...entry, rank: index + 1 }));
-  if (sorted.some((entry, index) => entry.hub_id !== corrected[index].hub_id)) {
-    corrections.push("ranking order was rebuilt from the true scores");
-  }
-  return sorted;
+  // Groups keep the order in which the model first mentioned each hazard.
+  const metrics = [...new Set(corrected.map((entry) => entry.metric))];
+  let orderWasWrong = false;
+
+  const grouped = metrics.flatMap((metric) => {
+    const given = corrected.filter((entry) => entry.metric === metric);
+    const sorted = [...given].sort((a, b) => b.score - a.score);
+    if (hubOrder(given) !== hubOrder(sorted)) orderWasWrong = true;
+    return sorted.map((entry, index) => ({ ...entry, rank: index + 1 }));
+  });
+
+  if (orderWasWrong) corrections.push("ranking order was rebuilt from the true scores");
+  return grouped;
 }
 
 export function groundAnswer(
