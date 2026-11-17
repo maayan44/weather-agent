@@ -1,4 +1,4 @@
-import { ARCHIVE_LAG_DAYS } from "../config/dataSources";
+import { ARCHIVE_LAG_DAYS, RECENT_REFETCH_DAYS } from "../config/dataSources";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -15,18 +15,29 @@ export function addDays(isoDate: string, days: number): string {
   return toIsoDate(new Date(new Date(`${isoDate}T00:00:00Z`).getTime() + days * MS_PER_DAY));
 }
 
-// We keep data from Jan 1 of last year so both "last year" and "last 12 months" questions work.
+// Both ends count: Jan 1 to Jan 3 is 3 days.
+export function daysInclusive(startDate: string, endDate: string): number {
+  if (endDate < startDate) return 0;
+  return Math.round((Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / MS_PER_DAY) + 1;
+}
+
+// From Dec 1 two years back: covers "last calendar year", "last 12 months" and "last winter" even in January.
 export function getFirstWantedDate(today: Date): string {
-  return `${today.getUTCFullYear() - 1}-01-01`;
+  return `${today.getUTCFullYear() - 2}-12-01`;
 }
 
 export function getLastAvailableDate(today: Date): string {
   return toIsoDate(new Date(today.getTime() - ARCHIVE_LAG_DAYS * MS_PER_DAY));
 }
 
-// Returns only the days we don't have yet, or null when the cache is already current.
-export function getMissingWindow(today: Date, latestCachedDate: string | null): DateWindow | null {
-  const startDate = latestCachedDate ? addDays(latestCachedDate, 1) : getFirstWantedDate(today);
-  const endDate = getLastAvailableDate(today);
-  return startDate > endDate ? null : { startDate, endDate };
+export function getWantedRange(today: Date): DateWindow {
+  return { startDate: getFirstWantedDate(today), endDate: getLastAvailableDate(today) };
+}
+
+// If any day in the wanted range is missing, fetch the whole range (one request per hub, so cheap).
+// Otherwise fetch only the newest days: the archive corrects recent values for a few days after publishing.
+export function getFetchWindow(wanted: DateWindow, storedDays: number): DateWindow {
+  if (storedDays < daysInclusive(wanted.startDate, wanted.endDate)) return wanted;
+  const recentStart = addDays(wanted.endDate, -(RECENT_REFETCH_DAYS - 1));
+  return { startDate: recentStart > wanted.startDate ? recentStart : wanted.startDate, endDate: wanted.endDate };
 }

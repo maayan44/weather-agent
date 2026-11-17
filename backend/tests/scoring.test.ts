@@ -145,9 +145,17 @@ describe("computeHubRisk", () => {
     expect(risk.dominantHazard).toBe("heat");
   });
 
-  it("breaks dominant-hazard ties by the fixed hazard order", () => {
+  it("reports no dominant hazard when every hazard scores 0", () => {
     const risk = computeHubRisk(phoenix, { weather: makeWeather(fullYear), hazards: NO_HAZARDS });
-    expect(risk.dominantHazard).toBe("winter");
+    expect(risk.dominantHazard).toBeNull();
+  });
+
+  it("breaks dominant-hazard ties by the fixed hazard order", () => {
+    // Flood: inland 8/yr (100 x 0.4) + coastal 4/yr (100 x 0.3) = 70. Hurricane: 0.21 of 0.3/yr = 70. A tie.
+    const hazards = { ...NO_HAZARDS, inlandFloodAnnualFrequency: 8, coastalFloodAnnualFrequency: 4, hurricaneAnnualFrequency: 0.21 };
+    const risk = computeHubRisk(phoenix, { weather: makeWeather(fullYear), hazards });
+    expect(risk.subScores.flood.score).toBeCloseTo(risk.subScores.hurricane.score, 5);
+    expect(risk.dominantHazard).toBe("flood"); // flood comes before hurricane in the fixed order
   });
 
   it("reports the data window and flags thin data", () => {

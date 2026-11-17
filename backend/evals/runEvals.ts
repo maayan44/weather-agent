@@ -10,17 +10,19 @@ import { EVAL_CASES } from "./questions";
 import { formatCase, formatSummary } from "./report";
 import { runEvalCase, type CaseResult } from "./runCase";
 
-// Usage: npm run eval [-- --only id1,id2] [-- --verbose]
+// Usage: npm run eval [-- --only id1,id2] [-- --repeat 3] [-- --verbose]
 function parseArguments(args: string[]) {
-  const onlyIndex = args.indexOf("--only");
-  return {
-    verbose: args.includes("--verbose"),
-    only: onlyIndex >= 0 ? args[onlyIndex + 1]?.split(",") : undefined,
+  const valueAfter = (flag: string) => {
+    const index = args.indexOf(flag);
+    return index >= 0 ? args[index + 1] : undefined;
   };
+  const repeat = Number(valueAfter("--repeat") ?? 1);
+  if (!Number.isInteger(repeat) || repeat < 1 || repeat > 10) throw new Error("--repeat must be a whole number from 1 to 10");
+  return { verbose: args.includes("--verbose"), only: valueAfter("--only")?.split(","), repeat };
 }
 
 async function main() {
-  const { verbose, only } = parseArguments(process.argv.slice(2));
+  const { verbose, only, repeat } = parseArguments(process.argv.slice(2));
   if (!process.env.ANTHROPIC_API_KEY) throw new Error("Set ANTHROPIC_API_KEY in backend/.env first.");
 
   const cases = only ? EVAL_CASES.filter((evalCase) => only.includes(evalCase.id)) : EVAL_CASES;
@@ -34,13 +36,17 @@ async function main() {
 
   const callModel = createModelCaller();
   const results: CaseResult[] = [];
-  console.log(`Running ${cases.length} eval case(s) with ${process.env.ANTHROPIC_MODEL ?? "the default model"}...\n`);
+  const times = repeat > 1 ? ` x ${repeat} runs` : "";
+  console.log(`Running ${cases.length} eval case(s)${times} with ${process.env.ANTHROPIC_MODEL ?? "the default model"}...\n`);
 
   // One at a time: cases are few, and this stays well inside API rate limits.
-  for (const evalCase of cases) {
-    const result = await runEvalCase(evalCase, { callModel, db });
-    results.push(result);
-    console.log(formatCase(result, verbose));
+  // Repeats show flakiness: the model's wording varies between runs even when the data does not.
+  for (let run = 1; run <= repeat; run++) {
+    for (const evalCase of cases) {
+      const result = { ...(await runEvalCase(evalCase, { callModel, db })), run: repeat > 1 ? run : undefined };
+      results.push(result);
+      console.log(formatCase(result, verbose));
+    }
   }
 
   console.log(formatSummary(results));

@@ -100,6 +100,7 @@ Order changed during the work (agreed with Maayan):
 | 6 | API endpoint + conversation history + ingest on startup | Done, checked live (fresh DB, 2-turn chat, reload) |
 | 6a | Deploy backend skeleton to Railway (with a volume) | Done: live, chat + follow-up checked, data survives a redeploy |
 | 7 | Eval runner: one command, pass/fail | Done: 10/10 cases, 32/32 checks on live Claude |
+| 7a | Code review + fix all 20 findings | Done: 174 tests, eval 10/10 on Haiku (also 20/20 over 2 repeats). Not yet deployed to Railway (needs a push) |
 
 Done when: `npm run eval` prints pass/fail and a curl to `/chat` returns a valid structured answer.
 

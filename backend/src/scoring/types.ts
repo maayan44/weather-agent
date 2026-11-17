@@ -29,7 +29,7 @@ export interface HubRisk {
   hubName: string;
   region: string;
   compositeScore: number;
-  dominantHazard: Hazard;
+  dominantHazard: Hazard | null;
   subScores: Record<Hazard, SubScore>;
   windowStart: string;
   windowEnd: string;

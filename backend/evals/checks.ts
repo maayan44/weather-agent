@@ -8,6 +8,8 @@ export interface CheckResult {
   description: string;
   passed: boolean;
   detail: string;
+  // The check's precondition did not hold (e.g. the data no longer shows a tie), so it tested nothing.
+  skipped?: boolean;
 }
 
 const SCORE_TOLERANCE = 0.051;
@@ -58,7 +60,7 @@ export function describeCheck(check: Check): string {
   }
 }
 
-function runCheck(check: Check, run: AgentRunResult, db: Db): { passed: boolean; detail: string } {
+function runCheck(check: Check, run: AgentRunResult, db: Db): { passed: boolean; detail: string; skipped?: boolean } {
   const { answer } = run;
 
   switch (check.kind) {
@@ -77,7 +79,7 @@ function runCheck(check: Check, run: AgentRunResult, db: Db): { passed: boolean;
     case "empty":
       return { passed: answer[check.field].length === 0, detail: `${check.field} had ${answer[check.field].length} item(s)` };
     case "all_figures_grounded": {
-      const removed = run.corrections.filter((correction) => correction.startsWith("removed"));
+      const removed = run.corrections.filter((correction) => correction.includes("ungrounded figure"));
       return { passed: removed.length === 0, detail: removed.length === 0 ? "none removed" : removed.join("; ") };
     }
     case "quotes_engine_score": {
@@ -96,7 +98,7 @@ function runCheck(check: Check, run: AgentRunResult, db: Db): { passed: boolean;
     case "tie_acknowledged": {
       const [hubA, hubB] = check.hubs;
       const gap = Math.abs(getHubScore(db, hubA, check.metric) - getHubScore(db, hubB, check.metric));
-      if (gap > check.withinPoints) return { passed: true, detail: `scores are ${gap.toFixed(1)} apart, so no tie to acknowledge` };
+      if (gap > check.withinPoints) return { passed: true, skipped: true, detail: `scores are now ${gap.toFixed(1)} apart, so there is no tie to test` };
       return { passed: mentionsAny(textOf(answer, "answer"), TIE_WORDS), detail: `scores are ${gap.toFixed(1)} apart; answer must call it a tie` };
     }
   }

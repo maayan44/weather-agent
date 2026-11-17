@@ -27,6 +27,13 @@ export function getLatestWeatherDate(db: Db, hubId: string): string | null {
   return row.latest;
 }
 
+export function countStoredDays(db: Db, hubId: string, startDate: string, endDate: string): number {
+  const row = db
+    .prepare("SELECT COUNT(*) AS days FROM daily_weather WHERE hub_id = ? AND date BETWEEN ? AND ?")
+    .get(hubId, startDate, endDate) as { days: number };
+  return row.days;
+}
+
 // Both bounds are inclusive.
 export function getDailyWeather(db: Db, hubId: string, startDate: string, endDate: string): DailyWeather[] {
   const rows = db

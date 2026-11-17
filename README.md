@@ -70,11 +70,24 @@ curl -X POST localhost:3000/chat -H "content-type: application/json" \
   -d '{"message":"Which hubs in the Midwest are most exposed to winter disruption?"}'
 ```
 
-Send the returned `conversation_id` with the next message to ask follow-up questions.
+Send the returned `conversation_id` with the next message to ask follow-up questions. Ids are issued by the
+server (random UUIDs); an id the server never issued returns 404. Messages in one conversation run one at a time.
 
-Errors always look like `{"error": "...", "code": "..."}`. Codes: `invalid_request` (400), `rate_limited` (429),
-`data_loading` (503), `ai_busy` (503), `agent_failed` (502), `ai_unavailable` (502), `not_found` (404).
-Limits: 1000 characters per message, 10 chat requests per minute per client.
+Errors always look like `{"error": "...", "code": "..."}`:
+
+| Code | Status | Meaning |
+|---|---|---|
+| `invalid_request` | 400 | Bad body or id (the message says which field) |
+| `not_found` | 404 | Unknown conversation |
+| `payload_too_large` | 413 | Body over 10 KB |
+| `rate_limited` | 429 | Over 10 chats per minute from this client |
+| `daily_limit_reached` | 429 | Over 300 chats today across all clients (protects the credits) |
+| `data_loading` | 503 | First data download still running |
+| `ai_busy` | 503 | Claude is rate limited, retry shortly |
+| `agent_failed` | 502 | The agent could not produce a valid answer |
+| `ai_unavailable` | 502 | Claude unreachable or no API key on the server |
+
+Limits: 1000 characters per message, 60 seconds per Claude call (retried once).
 
 Production build: `npm run build` then `npm start`.
 
@@ -104,7 +117,10 @@ cd backend
 npm run eval                              # all 10 questions: prints PASS/FAIL per case and a summary
 npm run eval -- --verbose                 # also shows every passing check
 npm run eval -- --only midwest-winter     # run one or more cases (comma separated ids)
+npm run eval -- --repeat 3                # run everything 3 times and report which cases are flaky
 ```
+
+Cheap runs: put `ANTHROPIC_MODEL=claude-haiku-5-5` in front (about 3 cents per full run instead of about 50 cents).
 
 - The 10 questions and their checks are in `backend/evals/questions.ts`.
 - Needs `ANTHROPIC_API_KEY`. It fills an empty data cache by itself.
@@ -113,7 +129,8 @@ npm run eval -- --only midwest-winter     # run one or more cases (comma separat
 - Exit code is 1 if any case fails, so it can run in CI.
 - What it checks: the right tool and arguments, the right hubs in the ranking, numbers backed by tool results, declining
   out-of-scope questions, honest confidence and ties. Expected scores are read from the scoring engine at run time, never hardcoded.
-- What it does not check: how well the answer is worded. Results can vary a little between runs.
+- A check whose precondition no longer holds (e.g. the data stopped showing a tie) is reported as `skip`, not as a pass.
+- What it does not check: how well the answer is worded. Results can vary a little between runs; use `--repeat`.
 
 ## Deployment (Railway)
 

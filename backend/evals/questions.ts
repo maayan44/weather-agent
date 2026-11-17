@@ -1,3 +1,4 @@
+import { AGENT_CONFIG } from "../src/config/agent";
 import { HUB_IDS } from "../src/config/hubs";
 import type { Hazard } from "../src/config/scoring";
 
@@ -155,7 +156,7 @@ export const EVAL_CASES: EvalCase[] = [
         ask: "Is Detroit or Chicago more exposed to winter?",
         checks: [
           { kind: "calls_tool", tool: "compare_hubs" },
-          { kind: "tie_acknowledged", hubs: ["detroit", "chicago"], metric: "winter", withinPoints: 3 },
+          { kind: "tie_acknowledged", hubs: ["detroit", "chicago"], metric: "winter", withinPoints: AGENT_CONFIG.tiePoints },
           { kind: "confidence", not: "high" },
         ],
       },

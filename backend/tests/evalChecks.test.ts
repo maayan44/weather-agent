@@ -128,6 +128,7 @@ describe("tie_acknowledged", () => {
     const far: Check = { kind: "tie_acknowledged", hubs: ["minneapolis", "chicago"], metric: "winter", withinPoints: 3 };
     const result = evaluateCheck(far, makeRun({ answer: "Minneapolis is clearly worse." }), db);
     expect(result.passed).toBe(true);
-    expect(result.detail).toContain("no tie to acknowledge");
+    expect(result.skipped).toBe(true); // reported as skipped, not as a silent pass
+    expect(result.detail).toContain("no tie to test");
   });
 });

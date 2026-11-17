@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { API_TOOLS, runTool } from "../src/agent/tools";
 import { createSeededDb } from "./helpers/seedDatabase";
 
-const context = { db: createSeededDb() };
+// A fixed "today" keeps period answers independent of the real clock.
+const context = { db: createSeededDb(), today: new Date("2026-11-17T12:00:00Z") };
 
 // Tool outputs are loosely typed on purpose (they become JSON for the model).
 function run(name: string, input: unknown): any {
@@ -86,7 +87,15 @@ describe("get_weather_stats", () => {
   it("reports how many days it really had when the period is only partly covered", () => {
     const result = run("get_weather_stats", { hub: "denver", condition: "snowfall", period: "last_calendar_year" });
     expect(result.daysWithData).toBe(49); // the seeded data starts 2025-11-13, so only Nov 13 - Dec 31 exist
+    expect(result.coverage).toBe("partial");
+    expect(result.missingDays).toBe(316);
     expect(result.daysMatching).toBe(0);
+  });
+
+  it("follows the given 'today', not the newest stored day", () => {
+    const january = { ...context, today: new Date("2027-01-03T12:00:00Z") };
+    const outcome = runTool("get_weather_stats", { hub: "denver", condition: "snowfall", period: "last_calendar_year" }, january);
+    expect((outcome.output as any).startDate).toBe("2026-01-01");
   });
 });
 

@@ -8,5 +8,8 @@ export const FEMA_NRI_COUNTIES_URL =
 // The archive trails real time by a few days; later dates come back empty.
 export const ARCHIVE_LAG_DAYS = 5;
 
+// The newest days are re-downloaded on every refresh because the archive revises them for a few days.
+export const RECENT_REFETCH_DAYS = 10;
+
 export const HTTP_TIMEOUT_MS = 20_000;
 export const HTTP_MAX_RETRIES = 3;

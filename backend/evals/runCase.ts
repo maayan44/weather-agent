@@ -22,6 +22,8 @@ export interface CaseResult {
   source: string;
   passed: boolean;
   turns: TurnResult[];
+  // Set when --repeat runs a case more than once.
+  run?: number;
 }
 
 interface Dependencies {

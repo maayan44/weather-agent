@@ -3,7 +3,7 @@ import { AGENT_CONFIG } from "../config/agent";
 import { toIsoDate } from "../data/dateRange";
 import { getHubScore } from "../scoring/hubRiskService";
 import { declinedAnswer } from "./answers";
-import { groundAnswer } from "./groundAnswer";
+import { extractNumbers, groundAnswer } from "./groundAnswer";
 import { agentAnswerSchema, type AgentAnswer } from "./schemas";
 import { buildSystemPrompt } from "./systemPrompt";
 import { API_TOOLS, runTool, type ToolContext } from "./tools";
@@ -51,6 +51,8 @@ function describeUngrounded(figures: AgentAnswer["figures"]): string {
 
 export async function runAgent({ message, history = [], callModel, context, today = new Date() }: RunAgentOptions): Promise<AgentRunResult> {
   const system = buildSystemPrompt(toIsoDate(today));
+  // Numbers the prompt states (weights, the tie margin, the 0-100 scale) are facts the model may repeat.
+  const promptNumbers = extractNumbers(system);
   const messages: Anthropic.MessageParam[] = [...historyToMessages(history), { role: "user", content: message }];
   const toolCalls: ToolCallRecord[] = [];
   const usage = { inputTokens: 0, outputTokens: 0 };
@@ -77,7 +79,7 @@ export async function runAgent({ message, history = [], callModel, context, toda
       const toolResults: Anthropic.ToolResultBlockParam[] = turn.content
         .filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use")
         .map((block) => {
-          const outcome = runTool(block.name, block.input, context);
+          const outcome = runTool(block.name, block.input, { ...context, today });
           toolCalls.push({ name: block.name, input: block.input, ...outcome });
           return outcome.error === undefined
             ? { type: "tool_result", tool_use_id: block.id, content: JSON.stringify(outcome.output) }
@@ -91,7 +93,7 @@ export async function runAgent({ message, history = [], callModel, context, toda
     if (!parsed.success) throw new AgentError("The model's answer did not match the required format.");
 
     const toolOutputs = toolCalls.flatMap((call) => (call.output === undefined ? [] : [call.output]));
-    const grounding = groundAnswer(parsed.data, toolOutputs, lookupScore);
+    const grounding = groundAnswer(parsed.data, toolOutputs, lookupScore, promptNumbers);
 
     if (grounding.ungroundedFigures.length > 0 && groundingRetries < AGENT_CONFIG.maxGroundingRetries) {
       groundingRetries++;
@@ -101,12 +103,18 @@ export async function runAgent({ message, history = [], callModel, context, toda
     }
 
     // Still ungrounded after the retry: drop those figures rather than show a number nothing backs up.
-    const { answer, corrections, ungroundedFigures } = grounding;
+    const { answer, corrections, ungroundedFigures, unverifiedTextNumbers } = grounding;
+    const dataGaps = [...answer.data_gaps];
     if (ungroundedFigures.length > 0) {
       answer.figures = answer.figures.filter((figure) => !ungroundedFigures.includes(figure));
-      answer.data_gaps.push(`${ungroundedFigures.length} figure(s) were removed because no tool result backed them up.`);
+      dataGaps.push(`${ungroundedFigures.length} figure(s) were removed because no tool result backed them up.`);
       corrections.push(`removed ${ungroundedFigures.length} ungrounded figure(s)`);
     }
-    return { answer, toolCalls, corrections, usage };
+    // Text cannot be edited safely, so a number no tool returned is flagged to the reader instead.
+    if (unverifiedTextNumbers.length > 0) {
+      dataGaps.push(`The explanation mentions ${unverifiedTextNumbers.join(", ")}, which is not a direct tool result; treat it as approximate.`);
+      corrections.push(`unverified numbers in text: ${unverifiedTextNumbers.join(", ")}`);
+    }
+    return { answer: { ...answer, data_gaps: dataGaps }, toolCalls, corrections, usage };
   }
 }

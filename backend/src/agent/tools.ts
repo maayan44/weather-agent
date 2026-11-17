@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { getHubsByRegion, HUBS, requireHub } from "../config/hubs";
 import { HAZARDS } from "../config/scoring";
+import { toIsoDate } from "../data/dateRange";
 import type { Db } from "../data/db";
 import { getDailyWeather, getLatestWeatherDate } from "../data/weatherRepository";
 import { explainHubRisk } from "../scoring/explain";
@@ -13,6 +14,8 @@ import { compareHubsInput, explainScoreInput, getHubRiskInput, getSnowfallTotalI
 
 export interface ToolContext {
   db: Db;
+  // The date questions like "last year" are relative to. Fixed in tests so results never depend on the clock.
+  today?: Date;
 }
 
 interface AgentTool<Schema extends z.ZodType = z.ZodType> {
@@ -32,12 +35,12 @@ function round(value: number, digits = 2): number {
   return Math.round(value * factor) / factor;
 }
 
-// Shared by the stats tools: periods are anchored on the newest day we hold for that hub.
-function loadPeriodWeather(db: Db, hubId: string, period: StatsPeriod) {
+// Shared by the stats tools.
+function loadPeriodWeather({ db, today = new Date() }: ToolContext, hubId: string, period: StatsPeriod) {
   const hub = requireHub(hubId);
   const latestDate = getLatestWeatherDate(db, hub.id);
   if (!latestDate) throw new Error(`No cached weather for ${hub.name}`);
-  const span = resolvePeriod(period, latestDate);
+  const span = resolvePeriod(period, toIsoDate(today), latestDate);
   return { hubName: hub.name, span, weather: getDailyWeather(db, hub.id, span.startDate, span.endDate) };
 }
 
@@ -135,8 +138,8 @@ export const AGENT_TOOLS: AgentTool[] = [
     description:
       "Count how many days at one hub had a given condition (snow, rain, heat, strong gusts...) in a period, as a number of days and a percentage. Use for 'what percentage of days...' questions. The response includes the exact definition of the condition.",
     inputSchema: getWeatherStatsInput,
-    run: ({ hub, condition, period }, { db }) => {
-      const { hubName, span, weather } = loadPeriodWeather(db, hub, period);
+    run: ({ hub, condition, period }, context) => {
+      const { hubName, span, weather } = loadPeriodWeather(context, hub, period);
       return { hub: hubName, ...computePercentOfDays(weather, condition, period, span) };
     },
   }),
@@ -146,8 +149,8 @@ export const AGENT_TOOLS: AgentTool[] = [
     description:
       "Total snowfall in inches at one hub over a period (including 'last_winter'), plus the number of snow days. Use for 'how much snow' questions. The response includes the exact dates covered and how many days had data.",
     inputSchema: getSnowfallTotalInput,
-    run: ({ hub, period }, { db }) => {
-      const { hubName, span, weather } = loadPeriodWeather(db, hub, period);
+    run: ({ hub, period }, context) => {
+      const { hubName, span, weather } = loadPeriodWeather(context, hub, period);
       return { hub: hubName, ...computeSnowfallTotal(weather, period, span) };
     },
   }),

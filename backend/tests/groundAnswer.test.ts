@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groundAnswer } from "../src/agent/groundAnswer";
+import { extractNumbers, groundAnswer } from "../src/agent/groundAnswer";
 import type { AgentAnswer } from "../src/agent/schemas";
 
 function makeAnswer(overrides: Partial<AgentAnswer> = {}): AgentAnswer {
@@ -55,9 +55,70 @@ describe("groundAnswer: figures", () => {
   });
 });
 
+describe("groundAnswer: numbers in the answer text", () => {
+  it("flags a number in the text that no tool returned", () => {
+    const answer = makeAnswer({ answer: "Denver had snow on 99.5% of days." });
+    expect(groundAnswer(answer, [{ percentage: 9 }], lookup).unverifiedTextNumbers).toEqual([99.5]);
+  });
+
+  it("flags a difference the model worked out itself", () => {
+    const answer = makeAnswer({ reasoning: ["Minneapolis leads Detroit by 23.8 points."] });
+    expect(groundAnswer(answer, [{ a: 85, b: 61.2 }], lookup).unverifiedTextNumbers).toEqual([23.8]);
+  });
+
+  it("accepts tool numbers, quoted figures, small counts, years and dates", () => {
+    const answer = makeAnswer({
+      answer: "Detroit scores 61.2, ranks 2nd of 3, in 2025; data 2025-11-13 to 2026-11-12; 6,810 rows.",
+      figures: [{ label: "rows", value: 6810, unit: "rows" }],
+    });
+    expect(groundAnswer(answer, [{ score: 61.2, rows: 6810 }], lookup).unverifiedTextNumbers).toEqual([]);
+  });
+
+  // The four false alarms seen in the live eval run:
+  it("accepts facts from the system prompt, such as weights and the 0-100 scale", () => {
+    const answer = makeAnswer({ answer: "Weights: winter 0.25, wind 0.15; Dallas scores 19.9 out of 100." });
+    const promptNumbers = extractNumbers("Weights: winter 0.25, wind 0.15. Composite risk is 0-100.");
+    expect(groundAnswer(answer, [{ composite: 19.9 }], lookup, promptNumbers).unverifiedTextNumbers).toEqual([]);
+  });
+
+  it("ignores dates written in words", () => {
+    const answer = makeAnswer({ answer: "15.8 inches from December 1, 2025 to February 28, 2026." });
+    expect(groundAnswer(answer, [{ total: 15.8 }], lookup).unverifiedTextNumbers).toEqual([]);
+  });
+
+  it("accepts the exact gap between two numbers the answer states", () => {
+    const answer = makeAnswer({ answer: "Detroit 61.2 and Chicago 59.9, a gap of 1.3 points." });
+    expect(groundAnswer(answer, [{ a: 61.2, b: 59.9 }], lookup).unverifiedTextNumbers).toEqual([]);
+  });
+
+  it("still flags a rounded gap the model estimated", () => {
+    const answer = makeAnswer({ answer: "Miami (100) is about 39 points above Houston (61.2)." });
+    expect(groundAnswer(answer, [{ a: 100, b: 61.2 }], lookup).unverifiedTextNumbers).toEqual([39]);
+  });
+
+  it("finds numbers inside tool text, such as a threshold in a label", () => {
+    const answer = makeAnswer({ answer: "We count days at or above 95°F." });
+    expect(groundAnswer(answer, [{ name: "Days at or above 95°F" }], lookup).unverifiedTextNumbers).toEqual([]);
+  });
+});
+
+describe("extractNumbers", () => {
+  it("reads decimals, negatives and thousands separators, and skips ISO dates", () => {
+    expect(extractNumbers("61.2 and -5 and 6,810 on 2026-11-12")).toEqual([61.2, -5, 6810]);
+  });
+
+  it("reads a range like 0-100 as two positive numbers", () => {
+    expect(extractNumbers("scores are 0-100")).toEqual([0, 100]);
+  });
+
+  it("skips day numbers in dates written with month names", () => {
+    expect(extractNumbers("Feb 28th and December 1, 2025 had 27 snow days")).toEqual([2025, 27]);
+  });
+});
+
 describe("groundAnswer: ranking", () => {
   it("leaves a correct ranking untouched", () => {
-    const answer = makeAnswer({ ranking: [entry("minneapolis", 85, 1), entry("detroit", 61.2, 2), entry("chicago", 59.9, 3)] });
+    const answer = makeAnswer({ confidence: "medium", ranking: [entry("minneapolis", 85, 1), entry("detroit", 61.2, 2), entry("chicago", 59.9, 3)] });
     const result = groundAnswer(answer, [], lookup);
     expect(result.corrections).toEqual([]);
     expect(result.answer.ranking.map((item) => item.hub_id)).toEqual(["minneapolis", "detroit", "chicago"]);
@@ -68,6 +129,25 @@ describe("groundAnswer: ranking", () => {
     const result = groundAnswer(answer, [], lookup);
     expect(result.answer.ranking[0].score).toBe(85);
     expect(result.corrections[0]).toContain("minneapolis winter score changed from 90 to 85");
+  });
+
+  it("drops a duplicate hub-and-hazard entry", () => {
+    const answer = makeAnswer({ ranking: [entry("minneapolis", 85, 1), entry("minneapolis", 85, 2)] });
+    const result = groundAnswer(answer, [], lookup);
+    expect(result.answer.ranking).toHaveLength(1);
+    expect(result.corrections).toContain("dropped duplicate ranking entry minneapolis:winter");
+  });
+
+  it("lowers high confidence when the ranking contains a near-tie", () => {
+    const answer = makeAnswer({ confidence: "high", ranking: [entry("detroit", 61.2, 1), entry("chicago", 59.9, 2)] });
+    const result = groundAnswer(answer, [], lookup);
+    expect(result.answer.confidence).toBe("medium");
+    expect(result.corrections).toContain("confidence lowered to medium: the ranking contains a near-tie");
+  });
+
+  it("keeps high confidence when the scores are clearly apart", () => {
+    const answer = makeAnswer({ confidence: "high", ranking: [entry("minneapolis", 85, 1), entry("detroit", 61.2, 2)] });
+    expect(groundAnswer(answer, [], lookup).answer.confidence).toBe("high");
   });
 
   it("ranks each hazard separately when one answer compares two hazards", () => {

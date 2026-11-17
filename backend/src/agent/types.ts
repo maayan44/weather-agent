@@ -19,3 +19,6 @@ export type ModelCaller = (request: ModelRequest) => Promise<ModelTurn>;
 
 // The agent could not produce a trustworthy answer; the API turns this into a clear error.
 export class AgentError extends Error {}
+
+// The AI service cannot be used at all, e.g. no API key is configured on the server.
+export class AiUnavailableError extends Error {}

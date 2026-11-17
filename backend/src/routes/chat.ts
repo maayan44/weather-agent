@@ -5,12 +5,14 @@ import { runAgent } from "../agent/runAgent";
 import type { ModelCaller } from "../agent/types";
 import { API_CONFIG } from "../config/api";
 import { HUBS } from "../config/hubs";
+import { withConversationLock } from "../conversations/conversationLock";
 import { getTurns, saveTurn } from "../conversations/conversationStore";
 import type { Db } from "../data/db";
 import { isDataReady } from "../data/readiness";
 import { ApiError } from "../middleware/apiError";
 
-export const conversationIdSchema = z.string().regex(/^[A-Za-z0-9_-]{8,64}$/, "conversation_id must be 8-64 letters, digits, - or _");
+// Ids are random UUIDs issued by the server, so they cannot be guessed or chosen by a client.
+export const conversationIdSchema = z.uuid({ message: "conversation_id must be an id returned by a previous /chat call" });
 
 const chatRequestSchema = z.object({
   message: z.string().trim().min(1, "message is required").max(API_CONFIG.maxMessageLength),
@@ -20,24 +22,31 @@ const chatRequestSchema = z.object({
 interface ChatDeps {
   db: Db;
   callModel: ModelCaller;
-  rateLimiter: RequestHandler;
+  limits: RequestHandler[];
 }
 
-export function createChatRouter({ db, callModel, rateLimiter }: ChatDeps) {
+export function createChatRouter({ db, callModel, limits }: ChatDeps) {
   const router = Router();
 
-  router.post("/chat", rateLimiter, async (req, res) => {
+  router.post("/chat", ...limits, async (req, res) => {
     const { message, conversation_id } = chatRequestSchema.parse(req.body);
 
     if (!isDataReady(db, HUBS)) {
       throw new ApiError(503, "data_loading", "Weather data is still loading. Try again in a minute.");
     }
 
-    // The client may start a conversation by sending no id; we create one and return it.
+    // No id starts a new conversation; an id must belong to a conversation this server created.
     const conversationId = conversation_id ?? randomUUID();
-    const history = getTurns(db, conversationId, API_CONFIG.maxHistoryTurns);
-    const result = await runAgent({ message, history, callModel, context: { db } });
-    saveTurn(db, conversationId, { userMessage: message, answer: result.answer });
+
+    const result = await withConversationLock(conversationId, async () => {
+      const history = getTurns(db, conversationId, API_CONFIG.maxHistoryTurns);
+      if (conversation_id && history.length === 0) {
+        throw new ApiError(404, "not_found", "Conversation not found. Send the message without conversation_id to start a new one.");
+      }
+      const run = await runAgent({ message, history, callModel, context: { db } });
+      saveTurn(db, conversationId, { userMessage: message, answer: run.answer });
+      return run;
+    });
 
     res.json({
       conversation_id: conversationId,

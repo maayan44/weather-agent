@@ -1,23 +1,45 @@
 import { describe, expect, it } from "vitest";
-import { getMissingWindow } from "../src/data/dateRange";
+import { daysInclusive, getFetchWindow, getFirstWantedDate, getWantedRange } from "../src/data/dateRange";
 
 const today = new Date("2026-11-17T12:00:00Z");
 
-describe("getMissingWindow", () => {
-  it("starts from Jan 1 of last year when the cache is empty", () => {
-    expect(getMissingWindow(today, null)).toEqual({ startDate: "2025-01-01", endDate: "2026-11-12" });
+describe("daysInclusive", () => {
+  it("counts both ends, across months and leap years", () => {
+    expect(daysInclusive("2026-01-01", "2026-01-03")).toBe(3);
+    expect(daysInclusive("2026-01-01", "2026-01-01")).toBe(1);
+    expect(daysInclusive("2024-02-01", "2024-03-01")).toBe(30);
+    expect(daysInclusive("2026-01-02", "2026-01-01")).toBe(0);
+  });
+});
+
+describe("wanted range", () => {
+  it("starts on Dec 1 two years back so 'last winter' is covered even in January", () => {
+    expect(getFirstWantedDate(today)).toBe("2024-12-01");
+    expect(getFirstWantedDate(new Date("2027-01-03T00:00:00Z"))).toBe("2025-12-01");
   });
 
-  it("continues from the day after the newest cached day", () => {
-    expect(getMissingWindow(today, "2026-11-01")).toEqual({ startDate: "2026-11-02", endDate: "2026-11-12" });
+  it("ends 5 days ago because of the archive delay", () => {
+    expect(getWantedRange(today)).toEqual({ startDate: "2024-12-01", endDate: "2026-11-12" });
+  });
+});
+
+describe("getFetchWindow", () => {
+  const wanted = { startDate: "2026-01-01", endDate: "2026-01-31" };
+
+  it("fetches the whole range when the cache is empty", () => {
+    expect(getFetchWindow(wanted, 0)).toEqual(wanted);
   });
 
-  it("returns null when the cache is already current", () => {
-    expect(getMissingWindow(today, "2026-11-12")).toBeNull();
+  it("refills the whole range when a day in the middle is missing", () => {
+    expect(getFetchWindow(wanted, 30)).toEqual(wanted);
   });
 
-  it("handles month and year rollover", () => {
-    expect(getMissingWindow(today, "2026-10-31")?.startDate).toBe("2026-11-01");
-    expect(getMissingWindow(new Date("2027-01-03T00:00:00Z"), "2026-12-31")).toBeNull();
+  it("re-fetches only the newest 10 days when everything is stored", () => {
+    expect(getFetchWindow(wanted, 31)).toEqual({ startDate: "2026-01-22", endDate: "2026-01-31" });
+  });
+
+  it("never starts before the wanted range", () => {
+    const short = { startDate: "2026-01-01", endDate: "2026-01-05" };
+    expect(getFetchWindow(short, 5)).toEqual(short);
   });
 });

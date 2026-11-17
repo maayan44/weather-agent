@@ -18,9 +18,17 @@ export function saveTurn(db: Db, conversationId: string, turn: ConversationTurn,
   ).run(conversationId, turn.userMessage, JSON.stringify(turn.answer), now.toISOString());
 }
 
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
 function toStoredTurn(row: TurnRow): StoredTurn | null {
-  const answer = agentAnswerSchema.safeParse(JSON.parse(row.answer_json));
-  // A row from an older answer format is skipped instead of breaking the whole conversation.
+  const answer = agentAnswerSchema.safeParse(parseJson(row.answer_json));
+  // A damaged row or one from an older answer format is skipped instead of breaking the whole conversation.
   return answer.success ? { userMessage: row.user_message, answer: answer.data, createdAt: row.created_at } : null;
 }
 

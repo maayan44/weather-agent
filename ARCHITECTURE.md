@@ -21,9 +21,9 @@
 |---|---|
 | Chat UI | Message list, shows ranking and reasons. Talks only to the API. |
 | Backend API | Express. `POST /chat` validates the message, loads the last 10 turns, calls the agent, saves the turn, returns JSON. Also `/health`, `/hubs`, `/conversations/:id`. Rate limited because each chat costs money. |
-| Startup refresh | On boot the server fills any missing data in the background and refreshes it every 6 hours. `/chat` returns 503 until the data is there. |
+| Startup refresh | On boot the server fills any missing days in the background, then every 6 hours re-downloads the newest 10 days (the archive revises them). One failing hub never blocks the others. If FEMA is down on a fresh server, a bundled FEMA snapshot is used until FEMA answers. `/chat` returns 503 until data is there. |
 | Agent | Claude picks a tool, reads its result, writes the explanation. Output must match a JSON schema. |
-| Answer check | After Claude answers, our code re-checks it: scores are replaced by the engine's values, the order is rebuilt, and numbers no tool returned trigger one retry, then are removed. |
+| Answer check | After Claude answers, our code re-checks it: scores are replaced by the engine's values, duplicates dropped, the order rebuilt per hazard, and "high" confidence lowered when the ranking has a near-tie. A figure no tool returned triggers one retry, then is removed. A number in the text that no tool returned (and is not an exact gap between stated numbers) is flagged to the reader in `data_gaps`. |
 | Scoring engine | Formula only. Turns data into 5 sub-scores and one composite (0-100). |
 | Data layer | Fetches Open-Meteo + FEMA, caches in SQLite. Scoring never calls the live APIs. |
 | Evals | 10 approved questions with checks (`backend/evals/questions.ts`), written before the runner. `npm run eval` runs them on live Claude and checks tool use, hubs, numbers against the engine, declining out-of-scope questions, and honest confidence. Expected numbers are never hardcoded. |
@@ -115,15 +115,16 @@ the browser-to-server hop; the model call dominates response time.
 | Thresholds | Chosen by looking at the last year of data for these 10 hubs | Fixed anchors, but still a judgment call. |
 | Composite | A weighted average hides single extreme hazards | Answers show the dominant hazard next to the composite. |
 | Weather source | Open-Meteo archive (a coarse reanalysis model, not stations) | Gust data likely understates extremes (Denver looks calm). |
-| Weather window | Jan 1 of last year to today minus 5 days (archive delay) | "Last year" = last calendar year. Scores use the newest 365 days. |
+| Weather window | Dec 1 two years back to today minus 5 days (archive delay) | Covers "last year" and "last winter" even in January. Calendar periods follow today's date; scores use the newest 365 days. Answers report how many days of a period are missing. |
 | Snow day | Snowfall of 0.1 in or more (stats questions); 1 in or more (risk score) | Different questions use different definitions, stated in the answer. |
 | "Last winter" | Dec 1 to the end of Feb, the most recent finished winter | Data starts Jan 1 of last year, so older winters are not available. |
-| FEMA data | County-level, historical event frequency, not a forecast | Same value for the whole county. Used frequency, not FEMA's risk score, because the score is weighted by property value and every large county reads "Very High". |
+| FEMA data | County-level, historical event frequency, not a forecast | Same value for the whole county. Used frequency, not FEMA's risk score, because the score is weighted by property value and every large county reads "Very High". A snapshot (2026-11-17) is bundled as a fallback if FEMA is unreachable. |
 | Not applicable | FEMA "not applicable" (e.g. hurricanes in Denver) is stored as 0 | Means "no recorded events", not "perfectly safe". |
 | Scope | No forecasts, wildfire, earthquake or hubs outside the list | The agent must decline these questions. |
 | Single year | Scores reflect one 12-month window | One unusual year (e.g. dry Denver winter) can distort a score. |
 | LLM | Claude Opus 5.5, medium effort. The model name is an env var | Wording can vary between runs. Numbers cannot, because code checks them. |
-| Eval coverage | 10 cases, one run each. Checks are about structure and numbers, not wording | Passing does not prove every answer reads well. LLM output varies slightly between runs. |
-| Access control | No login. The only protection is a per-client rate limit and a message length limit | Anyone with the URL can chat and spend credits. Fine for a demo. A real system would add auth and a spend cap. |
-| Conversation ids | Random ids act as the only secret for reading a conversation | Fine for a demo. Not suitable for private data. |
+| Eval coverage | 10 cases; `--repeat` measures flakiness; checks with a stale precondition show as skipped. Checks cover structure and numbers, not wording | Passing does not prove every answer reads well. Keyword checks (e.g. "tie") can miss a correct answer worded differently. |
+| Number checks | A figure is accepted if its value appears in any tool result | A made-up figure that happens to equal another number in the results (e.g. a rank of 3) still passes. |
+| Access control | No login. Per-client limit (10/min), daily cap across all clients (300 chats), 1000-character messages | Anyone with the URL can chat until the daily cap. Fine for a demo; a real system would add auth. Also set a spend limit in the Claude Console. |
+| Conversation ids | Server-issued random UUIDs act as the only secret for reading a conversation | Unguessable, but anyone given the id can read it. Not suitable for private data. |
 | Wrong premises | A question like "why is Dallas high?" may not match the data (Dallas ranks 7th of 10) | The agent is told to check the premise and say so. |

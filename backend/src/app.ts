@@ -3,6 +3,7 @@ import express from "express";
 import type { ModelCaller } from "./agent/types";
 import { API_CONFIG } from "./config/api";
 import type { Db } from "./data/db";
+import { createDailyLimit } from "./middleware/dailyLimit";
 import { errorHandler } from "./middleware/errorHandler";
 import { createChatRateLimiter } from "./middleware/rateLimit";
 import { createChatRouter } from "./routes/chat";
@@ -14,10 +15,16 @@ export interface AppDependencies {
   db: Db;
   callModel: ModelCaller;
   chatRateLimitPerMinute?: number;
+  chatDailyLimit?: number;
 }
 
 // Built from its dependencies (not globals) so tests can plug in a scripted model and an in-memory DB.
-export function createApp({ db, callModel, chatRateLimitPerMinute = API_CONFIG.chatRateLimitPerMinute }: AppDependencies) {
+export function createApp({
+  db,
+  callModel,
+  chatRateLimitPerMinute = API_CONFIG.chatRateLimitPerMinute,
+  chatDailyLimit = API_CONFIG.chatDailyLimit,
+}: AppDependencies) {
   const app = express();
   // Railway sits behind a proxy; without this every client would look like the same address to the rate limiter.
   app.set("trust proxy", 1);
@@ -26,7 +33,9 @@ export function createApp({ db, callModel, chatRateLimitPerMinute = API_CONFIG.c
 
   app.use(createHealthRouter(db));
   app.use(hubsRouter);
-  app.use(createChatRouter({ db, callModel, rateLimiter: createChatRateLimiter(chatRateLimitPerMinute) }));
+  // Per-client limit first, so one noisy client cannot use up the shared daily budget.
+  const limits = [createChatRateLimiter(chatRateLimitPerMinute), createDailyLimit(chatDailyLimit)];
+  app.use(createChatRouter({ db, callModel, limits }));
   app.use(createConversationsRouter(db));
 
   app.use(errorHandler);

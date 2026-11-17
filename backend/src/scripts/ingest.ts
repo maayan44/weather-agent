@@ -7,7 +7,11 @@ import { ingestAll } from "../data/ingestion";
 async function main() {
   const db = openDatabase(process.env.DB_PATH ?? "./data/weather.db");
   const summary = await ingestAll(db, HUBS);
-  console.log(`Added ${summary.weatherRowsAdded} weather rows. FEMA refreshed: ${summary.hazardsRefreshed}`);
+  console.log(`Saved ${summary.weatherRowsSaved} weather rows. FEMA: ${summary.hazardsSource}`);
+  if (summary.failures.length > 0) {
+    console.error(`Failures:\n  ${summary.failures.join("\n  ")}`);
+    process.exitCode = 1;
+  }
 }
 
 main().catch((error) => {

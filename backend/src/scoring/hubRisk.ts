@@ -13,8 +13,10 @@ function roundSubScore(subScore: SubScore): SubScore {
 }
 
 // First hazard with the highest score wins ties, in the fixed HAZARDS order.
-function findDominantHazard(subScores: Record<Hazard, SubScore>): Hazard {
-  return HAZARDS.reduce((top, hazard) => (subScores[hazard].score > subScores[top].score ? hazard : top));
+// No hazard at all (every score 0) is "none", not an arbitrary first hazard.
+function findDominantHazard(subScores: Record<Hazard, SubScore>): Hazard | null {
+  const top = HAZARDS.reduce((best, hazard) => (subScores[hazard].score > subScores[best].score ? hazard : best));
+  return subScores[top].score > 0 ? top : null;
 }
 
 // Pure function: same input always gives the same output, with no clock, network or LLM involved.
