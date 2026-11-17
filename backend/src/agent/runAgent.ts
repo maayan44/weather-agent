@@ -1,8 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { requireHub } from "../config/hubs";
 import { AGENT_CONFIG } from "../config/agent";
 import { toIsoDate } from "../data/dateRange";
-import { getHubRisk } from "../scoring/hubRiskService";
+import { getHubScore } from "../scoring/hubRiskService";
 import { declinedAnswer } from "./answers";
 import { groundAnswer } from "./groundAnswer";
 import { agentAnswerSchema, type AgentAnswer } from "./schemas";
@@ -58,10 +57,7 @@ export async function runAgent({ message, history = [], callModel, context, toda
   let toolRounds = 0;
   let groundingRetries = 0;
 
-  const lookupScore = (hubId: string, metric: AgentAnswer["ranking"][number]["metric"]) => {
-    const risk = getHubRisk(context.db, requireHub(hubId));
-    return metric === "composite" ? risk.compositeScore : risk.subScores[metric].score;
-  };
+  const lookupScore = (hubId: string, metric: AgentAnswer["ranking"][number]["metric"]) => getHubScore(context.db, hubId, metric);
 
   for (;;) {
     const turn = await callModel({ system, tools: API_TOOLS, messages });

@@ -18,6 +18,7 @@ export type Check =
   | { kind: "all_figures_grounded" }
   // The engine's real score for this hub appears in the answer's ranking or figures.
   | { kind: "quotes_engine_score"; hub: string; metric: Hazard | "composite" }
+  // Case-insensitive. "answer" means the answer text plus the reasoning bullets.
   | { kind: "mentions"; anyOf: string[]; in: AnswerField }
   | { kind: "confidence"; is?: "high" | "medium" | "low"; not?: "high" | "medium" | "low" }
   // If the engine says the two hubs are within `withinPoints`, the answer must say it is a tie or close.

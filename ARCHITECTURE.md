@@ -26,7 +26,7 @@
 | Answer check | After Claude answers, our code re-checks it: scores are replaced by the engine's values, the order is rebuilt, and numbers no tool returned trigger one retry, then are removed. |
 | Scoring engine | Formula only. Turns data into 5 sub-scores and one composite (0-100). |
 | Data layer | Fetches Open-Meteo + FEMA, caches in SQLite. Scoring never calls the live APIs. |
-| Evals | 10 approved questions with checks (`backend/evals/questions.ts`), written before the runner. The runner (step 7) checks tool use, numbers against the engine, and declining out-of-scope questions. Expected numbers are never hardcoded. |
+| Evals | 10 approved questions with checks (`backend/evals/questions.ts`), written before the runner. `npm run eval` runs them on live Claude and checks tool use, hubs, numbers against the engine, declining out-of-scope questions, and honest confidence. Expected numbers are never hardcoded. |
 
 Rule: the LLM never computes or invents a number. Every number comes from a tool result.
 
@@ -43,6 +43,9 @@ Agent tools (all plain functions in our code, inputs validated with Zod):
 
 JSON contract (final answer): `in_scope`, `answer`, `ranking[]`, `figures[]`, `reasoning[]`, `assumptions[]`,
 `confidence`, `data_gaps[]`. The schema is sent to Claude as `output_config.format` and re-validated with Zod.
+
+`ranking[]` has one entry per hub for each score discussed, ranked within its own hazard (a Miami vs Houston
+comparison on hurricane and flood lists each hub twice). Code rebuilds the order from the engine's scores.
 
 The agent keeps only questions and final answers between turns. It calls tools again for follow-ups.
 
@@ -63,7 +66,7 @@ WeatherHub/
       scripts/     ingest.ts
       app.ts  server.ts
     tests/         unit tests
-    evals/         questions.ts (the spec), runner in step 7
+    evals/         questions.ts (the 10 cases), checks, runner, report
   frontend/        chat UI   (session 2)
 ```
 
@@ -109,6 +112,7 @@ Postgres would be the next step for many users or hubs. It is not needed here.
 | Scope | No forecasts, wildfire, earthquake or hubs outside the list | The agent must decline these questions. |
 | Single year | Scores reflect one 12-month window | One unusual year (e.g. dry Denver winter) can distort a score. |
 | LLM | Claude Opus 5.5, medium effort. The model name is an env var | Wording can vary between runs. Numbers cannot, because code checks them. |
+| Eval coverage | 10 cases, one run each. Checks are about structure and numbers, not wording | Passing does not prove every answer reads well. LLM output varies slightly between runs. |
 | Access control | No login. The only protection is a per-client rate limit and a message length limit | Anyone with the URL can chat and spend credits. Fine for a demo. A real system would add auth and a spend cap. |
 | Conversation ids | Random ids act as the only secret for reading a conversation | Fine for a demo. Not suitable for private data. |
 | Wrong premises | A question like "why is Dallas high?" may not match the data (Dallas ranks 7th of 10) | The agent is told to check the premise and say so. |

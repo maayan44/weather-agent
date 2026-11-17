@@ -17,7 +17,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the design. [PLAN.md](PLAN.md) has th
 | First live Claude call | Done |
 | API endpoint + conversation history + load data on startup | Done, checked live |
 | Backend skeleton on Railway | Not started |
-| Eval runner | Not started |
+| Eval runner (`npm run eval`) | Done: 10/10 cases pass on live Claude |
 | Chat UI, frontend deploy | Session 2 |
 
 ## Requirements
@@ -99,8 +99,21 @@ npm run typecheck
 
 ## Run the evals
 
-The 10 questions and their checks are in `backend/evals/questions.ts`. The runner comes in step 7:
-`npm run eval` will run them and print pass/fail. Like the agent, it needs `ANTHROPIC_API_KEY` and a filled cache.
+```bash
+cd backend
+npm run eval                              # all 10 questions: prints PASS/FAIL per case and a summary
+npm run eval -- --verbose                 # also shows every passing check
+npm run eval -- --only midwest-winter     # run one or more cases (comma separated ids)
+```
+
+- The 10 questions and their checks are in `backend/evals/questions.ts`.
+- Needs `ANTHROPIC_API_KEY`. It fills an empty data cache by itself.
+- Calls real Claude. A full run uses about 120,000 tokens, roughly 50 cents to a dollar on the default model (estimate).
+- Full answers are saved to `backend/evals/results/latest.json` (not committed), so a failure can be read without paying for a re-run.
+- Exit code is 1 if any case fails, so it can run in CI.
+- What it checks: the right tool and arguments, the right hubs in the ranking, numbers backed by tool results, declining
+  out-of-scope questions, honest confidence and ties. Expected scores are read from the scoring engine at run time, never hardcoded.
+- What it does not check: how well the answer is worded. Results can vary a little between runs.
 
 ## Run the frontend
 
