@@ -1,8 +1,16 @@
-import { addDays, daysInclusive } from "../data/dateRange";
+import { addDays, daysInclusive, toIsoDate } from "../data/dateRange";
 import type { DailyWeather } from "../data/types";
 import { DAY_CONDITIONS, countDays, type DayConditionId } from "./dayConditions";
 
-export const STATS_PERIODS = ["last_calendar_year", "last_12_months", "year_to_date", "last_winter"] as const;
+export const STATS_PERIODS = [
+  "last_calendar_year",
+  "last_12_months",
+  "year_to_date",
+  "last_winter",
+  "last_6_months",
+  "last_3_months",
+  "last_30_days",
+] as const;
 export type StatsPeriod = (typeof STATS_PERIODS)[number];
 
 export interface DateSpan {
@@ -33,6 +41,15 @@ export interface SnowfallTotal extends DateSpan, Coverage {
   snowDayDefinition: string;
 }
 
+// The first day of a window of N whole months ending on `latestDate`. A month-end clamps, so Aug 31 minus 6 months is Feb 28.
+function startOfRollingMonths(latestDate: string, months: number): string {
+  const [year, month, day] = latestDate.split("-").map(Number);
+  const target = new Date(Date.UTC(year, month - 1 - months, 1));
+  const lastDayOfTargetMonth = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(day, lastDayOfTargetMonth));
+  return addDays(toIsoDate(target), 1);
+}
+
 // Calendar periods follow today's date, as the user means them. Only the rolling 12 months follows the
 // newest stored day, so it always covers a full year of data. Both dates are YYYY-MM-DD.
 export function resolvePeriod(period: StatsPeriod, today: string, latestDate: string): DateSpan {
@@ -44,6 +61,13 @@ export function resolvePeriod(period: StatsPeriod, today: string, latestDate: st
       return { startDate: `${year}-01-01`, endDate: today };
     case "last_12_months":
       return { startDate: addDays(latestDate, -364), endDate: latestDate };
+    // Rolling windows end at the newest data, so they always hold a full span of real days.
+    case "last_6_months":
+      return { startDate: startOfRollingMonths(latestDate, 6), endDate: latestDate };
+    case "last_3_months":
+      return { startDate: startOfRollingMonths(latestDate, 3), endDate: latestDate };
+    case "last_30_days":
+      return { startDate: addDays(latestDate, -29), endDate: latestDate };
     case "last_winter": {
       // Winter is Dec 1 to the end of Feb; "last" means the most recent one that has finished.
       const winterEndYear = today >= `${year}-03-01` ? year : year - 1;

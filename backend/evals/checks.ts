@@ -31,6 +31,10 @@ function mentionsAny(text: string, words: string[]): boolean {
   return words.some((word) => text.includes(word.toLowerCase()));
 }
 
+function toolNames(tool: string | string[]): string {
+  return Array.isArray(tool) ? tool.join(" or ") : tool;
+}
+
 // Every key the check names must match; keys it does not name are ignored.
 function inputMatches(actual: unknown, expected: Record<string, string>): boolean {
   const input = (actual ?? {}) as Record<string, unknown>;
@@ -40,9 +44,11 @@ function inputMatches(actual: unknown, expected: Record<string, string>): boolea
 export function describeCheck(check: Check): string {
   switch (check.kind) {
     case "calls_tool":
-      return check.input ? `calls ${check.tool} with ${JSON.stringify(check.input)}` : `calls ${check.tool}`;
+      return check.input ? `calls ${toolNames(check.tool)} with ${JSON.stringify(check.input)}` : `calls ${toolNames(check.tool)}`;
     case "in_scope":
       return `in_scope is ${check.value}`;
+    case "ranking_has_scores":
+      return `ranking shows ${check.hub} for: ${check.metrics.join(", ")}`;
     case "ranking_hubs":
       return `ranking covers exactly ${check.hubs.join(", ")}`;
     case "empty":
@@ -65,11 +71,17 @@ function runCheck(check: Check, run: AgentRunResult, db: Db): { passed: boolean;
 
   switch (check.kind) {
     case "calls_tool": {
-      const passed = run.toolCalls.some((call) => call.name === check.tool && (!check.input || inputMatches(call.input, check.input)));
+      const allowed = Array.isArray(check.tool) ? check.tool : [check.tool];
+      const passed = run.toolCalls.some((call) => allowed.includes(call.name) && (!check.input || inputMatches(call.input, check.input)));
       return { passed, detail: `tools called: ${run.toolCalls.map((call) => `${call.name}${JSON.stringify(call.input)}`).join(", ") || "none"}` };
     }
     case "in_scope":
       return { passed: answer.in_scope === check.value, detail: `in_scope was ${answer.in_scope}` };
+    case "ranking_has_scores": {
+      const shown = answer.ranking.filter((entry) => entry.hub_id === check.hub).map((entry) => entry.metric);
+      const missing = check.metrics.filter((metric) => !shown.includes(metric));
+      return { passed: missing.length === 0, detail: missing.length === 0 ? `all ${check.metrics.length} scores shown` : `missing: ${missing.join(", ")}` };
+    }
     case "ranking_hubs": {
       // A hub may appear once per hazard, so compare the distinct hubs.
       const actual = [...new Set(answer.ranking.map((entry) => entry.hub_id))].sort();

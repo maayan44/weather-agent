@@ -114,13 +114,20 @@ export function groundAnswer(
 
   const ranking = groundRanking(answer.ranking, lookupScore, corrections);
 
+  // A figure labelled as a score that repeats a score already shown in the ranking only adds clutter.
+  const rankingScores = ranking.map((entry) => entry.score);
+  const figures = answer.figures.filter(
+    (figure) => !(/score/i.test(figure.unit) && rankingScores.some((score) => Math.abs(score - figure.value) < TOLERANCE)),
+  );
+  if (figures.length < answer.figures.length) corrections.push(`dropped ${answer.figures.length - figures.length} figure(s) that repeat ranking scores`);
+
   let confidence = answer.confidence;
   if (confidence === "high" && hasNearTie(ranking)) {
     confidence = "medium";
     corrections.push("confidence lowered to medium: the ranking contains a near-tie");
   }
 
-  const quoted = [...ranking.map((entry) => entry.score), ...answer.figures.map((figure) => figure.value)];
+  const quoted = [...ranking.map((entry) => entry.score), ...figures.map((figure) => figure.value)];
   const isQuoted = (value: number) => quoted.some((number) => Math.abs(number - value) < TOLERANCE);
   const textNumbers = [...new Set(extractNumbers([answer.answer, ...answer.reasoning].join(" ")))];
   const statedAndBacked = [...quoted, ...textNumbers.filter(isKnown)];
@@ -129,9 +136,9 @@ export function groundAnswer(
   );
 
   return {
-    answer: { ...answer, ranking, confidence },
+    answer: { ...answer, ranking, figures, confidence },
     corrections,
-    ungroundedFigures: answer.figures.filter((figure) => !isKnown(figure.value)),
+    ungroundedFigures: figures.filter((figure) => !isKnown(figure.value)),
     unverifiedTextNumbers,
   };
 }

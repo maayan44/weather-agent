@@ -21,12 +21,16 @@ export const compareHubsInput = z.object({ hub_a: hubIdSchema, hub_b: hubIdSchem
 export const getWeatherStatsInput = z.object({
   hub: hubIdSchema,
   condition: z.enum(DAY_CONDITION_IDS).describe("The kind of day to count, e.g. 'snowfall' for days with snow."),
-  period: z.enum(STATS_PERIODS).describe("last_calendar_year = the previous calendar year."),
+  period: z.enum(STATS_PERIODS).describe(
+    "last_calendar_year = the previous calendar year. last_6_months, last_3_months and last_30_days end at the newest data. Periods under a year miss seasons.",
+  ),
 });
 
 export const getSnowfallTotalInput = z.object({
   hub: hubIdSchema,
-  period: z.enum(STATS_PERIODS).describe("last_winter = Dec 1 to end of Feb, the most recent finished winter."),
+  period: z.enum(STATS_PERIODS).describe(
+    "last_winter = Dec 1 to end of Feb, the most recent finished winter. last_6_months, last_3_months and last_30_days end at the newest data.",
+  ),
 });
 
 export const explainScoreInput = z.object({ hub: hubIdSchema });

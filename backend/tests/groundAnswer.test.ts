@@ -55,6 +55,31 @@ describe("groundAnswer: figures", () => {
   });
 });
 
+describe("groundAnswer: figures that repeat the ranking", () => {
+  it("drops a score figure that is already a bar, and says so", () => {
+    const answer = makeAnswer({
+      ranking: [entry("minneapolis", 85, 1)],
+      figures: [
+        { label: "Minneapolis winter score", value: 85, unit: "score (0-100)" },
+        { label: "Freezing days", value: 64, unit: "days" },
+      ],
+    });
+    const result = groundAnswer(answer, [{ a: 85, b: 64 }], lookup);
+    expect(result.answer.figures.map((figure) => figure.label)).toEqual(["Freezing days"]);
+    expect(result.corrections).toContain("dropped 1 figure(s) that repeat ranking scores");
+  });
+
+  it("keeps a figure that merely has the same value but is not a score", () => {
+    const answer = makeAnswer({ ranking: [entry("minneapolis", 85, 1)], figures: [{ label: "Hot days", value: 85, unit: "days" }] });
+    expect(groundAnswer(answer, [{ days: 85 }], lookup).answer.figures).toHaveLength(1);
+  });
+
+  it("keeps a score figure for a hub that is not in the ranking", () => {
+    const answer = makeAnswer({ ranking: [entry("minneapolis", 85, 1)], figures: [{ label: "Chicago flood score", value: 44, unit: "score (0-100)" }] });
+    expect(groundAnswer(answer, [{ flood: 44 }], lookup).answer.figures).toHaveLength(1);
+  });
+});
+
 describe("groundAnswer: numbers in the answer text", () => {
   it("flags a number in the text that no tool returned", () => {
     const answer = makeAnswer({ answer: "Denver had snow on 99.5% of days." });

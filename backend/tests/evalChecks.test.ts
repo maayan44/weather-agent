@@ -59,6 +59,42 @@ describe("in_scope, empty, confidence", () => {
   });
 });
 
+describe("calls_tool with several allowed tools", () => {
+  const run = makeRun({}, { toolCalls: [{ name: "get_snowfall_total", input: { hub: "chicago", period: "last_6_months" } }] });
+
+  it("passes when any listed tool was called with the right arguments", () => {
+    expect(passes({ kind: "calls_tool", tool: ["get_weather_stats", "get_snowfall_total"], input: { period: "last_6_months" } }, run)).toBe(true);
+  });
+
+  it("fails when none of them was called, or the arguments differ", () => {
+    expect(passes({ kind: "calls_tool", tool: ["get_weather_stats", "rank_hubs"] }, run)).toBe(false);
+    expect(passes({ kind: "calls_tool", tool: ["get_snowfall_total"], input: { period: "year_to_date" } }, run)).toBe(false);
+  });
+
+  it("describes all the allowed tools", () => {
+    expect(evaluateCheck({ kind: "calls_tool", tool: ["a", "b"] }, run, db).description).toBe("calls a or b");
+  });
+});
+
+describe("ranking_has_scores (a hub profile)", () => {
+  const profile = (metrics: string[], hub = "chicago") => makeRun({ ranking: metrics.map((metric, index) => ({ rank: 1, hub_id: hub as "chicago", metric: metric as "winter", score: index, note: "" })) });
+  const check: Check = { kind: "ranking_has_scores", hub: "chicago", metrics: ["composite", "winter", "wind"] };
+
+  it("passes when every listed score is shown for that hub", () => {
+    expect(passes(check, profile(["composite", "wind", "winter", "flood"]))).toBe(true);
+  });
+
+  it("fails, and names what is missing, when a score is left out", () => {
+    const result = evaluateCheck(check, profile(["composite", "winter"]), db);
+    expect(result.passed).toBe(false);
+    expect(result.detail).toBe("missing: wind");
+  });
+
+  it("does not count scores shown for a different hub", () => {
+    expect(passes(check, profile(["composite", "winter", "wind"], "miami"))).toBe(false);
+  });
+});
+
 describe("ranking_hubs", () => {
   it("compares the set of hubs and ignores order", () => {
     const run = makeRun({ ranking: [entry("detroit"), entry("chicago")] });

@@ -17,10 +17,10 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the design. [PLAN.md](PLAN.md) has th
 | First live Claude call | Done |
 | API endpoint + conversation history + load data on startup | Done, checked live |
 | Backend on Railway | Done: live and checked, data survives redeploys |
-| Eval runner (`npm run eval`) | Done: 10/10 cases pass on live Claude |
+| Eval runner (`npm run eval`) | Done: 12/12 cases pass on live Claude (12 questions: the first 10 plus 2 from real user feedback) |
 | `GET /ranking` endpoint (no AI call) | Done |
 | Chat UI (mobile first) + Overview screen | Built and tested locally; not deployed yet |
-| Frontend deploy on Vercel | Next |
+| Frontend deploy on Vercel | Done: https://weather-agent-theta-ten.vercel.app (loads, reads the backend, no console errors) |
 
 ## Requirements
 
@@ -117,7 +117,7 @@ npm run typecheck
 
 ```bash
 cd backend
-npm run eval                              # all 10 questions: prints PASS/FAIL per case and a summary
+npm run eval                              # all 12 questions: prints PASS/FAIL per case and a summary
 npm run eval -- --verbose                 # also shows every passing check
 npm run eval -- --only midwest-winter     # run one or more cases (comma separated ids)
 npm run eval -- --repeat 3                # run everything 3 times and report which cases are flaky
@@ -125,9 +125,9 @@ npm run eval -- --repeat 3                # run everything 3 times and report wh
 
 Cheap runs: put `ANTHROPIC_MODEL=claude-haiku-5-5` in front (about 3 cents per full run instead of about 50 cents).
 
-- The 10 questions and their checks are in `backend/evals/questions.ts`.
+- The 12 questions and their checks are in `backend/evals/questions.ts`.
 - Needs `ANTHROPIC_API_KEY`. It fills an empty data cache by itself.
-- Calls real Claude. A full run uses about 120,000 tokens, roughly 50 cents to a dollar on the default model (estimate).
+- Calls real Claude. A full run uses about 150,000 tokens, roughly 60 cents to a dollar on the default model (estimate).
 - Full answers are saved to `backend/evals/results/latest.json` (not committed), so a failure can be read without paying for a re-run.
 - Exit code is 1 if any case fails, so it can run in CI.
 - What it checks: the right tool and arguments, the right hubs in the ranking, numbers backed by tool results, declining
@@ -153,7 +153,7 @@ Railway builds from the GitHub repo and redeploys on every push to `main`.
 | Variable | Value |
 |---|---|
 | `ANTHROPIC_API_KEY` | your key, set only in Railway |
-| `ANTHROPIC_MODEL` | `claude-haiku-5-5` (cheap, passes all 10 evals) |
+| `ANTHROPIC_MODEL` | `claude-haiku-5-5` (cheap, passes all 12 evals) |
 | `DB_PATH` | `/data/weather.db` |
 | `FRONTEND_ORIGIN` | the Vercel URL, once the frontend exists (until then any origin is allowed) |
 
@@ -195,6 +195,8 @@ light and dark mode that follow the phone, safe-area padding for the notch, Redu
 Contrast was measured at 4.5:1 or better for text, in both modes.
 
 ### Deploy on Vercel
+Live app: https://weather-agent-theta-ten.vercel.app
+
 1. In Vercel, create a project from the GitHub repo `maayan44/weather-agent`.
 2. Set **Root Directory** to `frontend`. The framework (Vite) is detected automatically.
 3. Add the variable `VITE_API_URL` = the Railway address (`https://weather-agent-production-5786e20f.up.railway.app`).

@@ -7,9 +7,9 @@ const allChecks: Check[] = EVAL_CASES.flatMap((evalCase) => evalCase.turns.flatM
 
 // Guards the question file against typos, since a wrong hub id or tool name would make a case unpassable.
 describe("eval question spec", () => {
-  it("has 10 cases with unique ids", () => {
-    expect(EVAL_CASES).toHaveLength(10);
-    expect(new Set(EVAL_CASES.map((evalCase) => evalCase.id)).size).toBe(10);
+  it("has 12 cases with unique ids", () => {
+    expect(EVAL_CASES).toHaveLength(12);
+    expect(new Set(EVAL_CASES.map((evalCase) => evalCase.id)).size).toBe(12);
   });
 
   it("gives every turn a question and at least one check", () => {
@@ -25,22 +25,26 @@ describe("eval question spec", () => {
   it("only names hubs that exist", () => {
     const hubsNamed = allChecks.flatMap((check) => {
       if (check.kind === "ranking_hubs" || check.kind === "tie_acknowledged") return check.hubs;
-      if (check.kind === "quotes_engine_score") return [check.hub];
+      if (check.kind === "quotes_engine_score" || check.kind === "ranking_has_scores") return [check.hub];
       return [];
     });
     for (const hub of hubsNamed) expect(HUB_IDS).toContain(hub);
   });
 
-  it("only expects tools that exist, with arguments those tools accept", () => {
+  it("only expects tools that exist, with arguments every one of those tools accepts", () => {
     for (const check of allChecks) {
       if (check.kind !== "calls_tool") continue;
-      const tool = API_TOOLS.find((candidate) => candidate.name === check.tool);
-      expect(tool, `unknown tool ${check.tool}`).toBeDefined();
+      const toolNames = Array.isArray(check.tool) ? check.tool : [check.tool];
 
-      const properties = (tool!.input_schema.properties ?? {}) as Record<string, { enum?: string[] }>;
-      for (const [key, value] of Object.entries(check.input ?? {})) {
-        expect(properties[key], `${check.tool} has no argument ${key}`).toBeDefined();
-        if (properties[key].enum) expect(properties[key].enum).toContain(value);
+      for (const toolName of toolNames) {
+        const tool = API_TOOLS.find((candidate) => candidate.name === toolName);
+        expect(tool, `unknown tool ${toolName}`).toBeDefined();
+
+        const properties = (tool!.input_schema.properties ?? {}) as Record<string, { enum?: string[] }>;
+        for (const [key, value] of Object.entries(check.input ?? {})) {
+          expect(properties[key], `${toolName} has no argument ${key}`).toBeDefined();
+          if (properties[key].enum) expect(properties[key].enum, `${toolName}.${key} does not accept ${value}`).toContain(value);
+        }
       }
     }
   });

@@ -10,8 +10,10 @@ type AnswerField = "answer" | "assumptions" | "data_gaps" | "anywhere";
 
 export type Check =
   // The agent used this tool. `input` lists only the arguments that must match.
-  | { kind: "calls_tool"; tool: string; input?: Record<string, string> }
+  | { kind: "calls_tool"; tool: string | string[]; input?: Record<string, string> }
   | { kind: "in_scope"; value: boolean }
+  // The ranking holds a score for this hub for every listed metric (a hub profile).
+  | { kind: "ranking_has_scores"; hub: string; metrics: (Hazard | "composite")[] }
   // Same set of hubs; the order is already forced to the engine's order by the answer check.
   | { kind: "ranking_hubs"; hubs: string[] }
   | { kind: "empty"; field: "ranking" | "figures" }
@@ -33,7 +35,7 @@ export interface EvalTurn {
 export interface EvalCase {
   id: string;
   title: string;
-  source: "task example" | "follow-up" | "out of scope" | "near-tie" | "composite" | "tool gap";
+  source: "task example" | "follow-up" | "out of scope" | "near-tie" | "composite" | "tool gap" | "real user feedback";
   // More than one turn tests follow-up questions; history is carried between turns.
   turns: EvalTurn[];
 }
@@ -97,7 +99,8 @@ export const EVAL_CASES: EvalCase[] = [
         checks: [
           { kind: "calls_tool", tool: "explain_score", input: { hub: "dallas" } },
           { kind: "quotes_engine_score", hub: "dallas", metric: "composite" },
-          { kind: "mentions", anyOf: ["rank", "moderate", "middle", "lower", "not high", "below"], in: "answer" },
+          // Different wordings of "this is not actually high risk"; the numeric check above covers the facts.
+          { kind: "mentions", anyOf: ["rank", "moderate", "middle", "lower", "not high", "not a high", "isn't high", "is not high", "below"], in: "answer" },
         ],
       },
     ],
@@ -188,6 +191,37 @@ export const EVAL_CASES: EvalCase[] = [
         checks: [
           { kind: "calls_tool", tool: "get_snowfall_total", input: { hub: "chicago", period: "last_winter" } },
           { kind: "mentions", anyOf: ["winter"], in: "assumptions" },
+          { kind: "all_figures_grounded" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "half-year-new-hub",
+    title: "Past half year in Chicago: use that period, warn it misses winter, note Chicago is already a hub",
+    source: "real user feedback",
+    turns: [
+      {
+        ask: "Summarize the past half year of weather in Chicago so I'll know if I should open a new hub over there",
+        checks: [
+          { kind: "calls_tool", tool: ["get_weather_stats", "get_snowfall_total"], input: { hub: "chicago", period: "last_6_months" } },
+          { kind: "mentions", anyOf: ["season", "winter"], in: "anywhere" },
+          { kind: "mentions", anyOf: ["already", "existing", "one of our"], in: "anywhere" },
+          { kind: "all_figures_grounded" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "chicago-profile",
+    title: "One hub: show overall plus all five hazards",
+    source: "real user feedback",
+    turns: [
+      {
+        ask: "How exposed is Chicago to each kind of weather?",
+        checks: [
+          { kind: "calls_tool", tool: ["get_hub_risk", "explain_score"] },
+          { kind: "ranking_has_scores", hub: "chicago", metrics: ["composite", "winter", "flood", "hurricane", "heat", "wind"] },
           { kind: "all_figures_grounded" },
         ],
       },

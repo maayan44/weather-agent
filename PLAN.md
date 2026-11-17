@@ -110,7 +110,13 @@ Done when: `npm run eval` prints pass/fail and a curl to `/chat` returns a valid
    Overview screen (needed the new `GET /ranking` endpoint), answer cards with confidence/assumptions/data gaps, copy button.
    Apple guidelines (44 pt targets, 16 px text, safe areas, dark mode) checked by measurement in a 430x932 frame; 53 frontend tests.
    Not yet seen on a real iPhone or in screenshots (Chrome screenshots timed out): the user will test on the phone.
-2. Deploy: frontend on Vercel, connect it to the Railway backend deployed in session 1. NEXT (needs a push first).
+1b. Fixes from the user's first real phone prompt ("summarize the past half year of weather in Chicago..."), all 5 done:
+   (1) new stats periods last_6_months / last_3_months / last_30_days (it had silently used year-to-date, 10.5 months, which hides winter);
+   (2) prompt: a period under a year misses seasons, say so and give the 12-month score; (3) one hub = overall + 5 hazards, shown as ONE profile card;
+   (4) no repeated scores in Key numbers (prompt + code drop), at most 6 figures; (5) say when the city is already one of our 10 hubs and that
+   new-site decisions need cost/demand/access data. Evals now 12 (2 new, from this prompt): 12/12 pass on Haiku. 192 backend + 60 frontend tests.
+2. Deploy: frontend on Vercel, connect it to the Railway backend deployed in session 1. DONE: https://weather-agent-theta-ten.vercel.app
+   (checked in a real browser: 10 hubs load from Railway, no console errors). Still to do: set FRONTEND_ORIGIN on Railway to this address.
 3. Bonus if time allows: voice first, then alerts (scheduled rescoring that diffs against the last stored score)
 4. Final check: tests, bugs, refactors, issues, edge cases
 5. Export the full AI session transcript (mandatory deliverable) and add it to the repo

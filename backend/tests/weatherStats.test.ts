@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { daysInclusive } from "../src/data/dateRange";
 import type { DailyWeather } from "../src/data/types";
 import { computePercentOfDays, computeSnowfallTotal, resolvePeriod } from "../src/scoring/weatherStats";
 
@@ -17,6 +18,31 @@ describe("resolvePeriod", () => {
   it("gets 'last year' right in the first days of January, before new data has arrived", () => {
     expect(resolvePeriod("last_calendar_year", "2027-01-03", "2026-12-29")).toEqual({ startDate: "2026-01-01", endDate: "2026-12-31" });
     expect(resolvePeriod("year_to_date", "2027-01-03", "2026-12-29")).toEqual({ startDate: "2027-01-01", endDate: "2027-01-03" });
+  });
+});
+
+describe("resolvePeriod: rolling windows", () => {
+  const today = "2026-11-17";
+
+  it("ends on the newest data and starts N whole months earlier (the case a user actually asked: past half year)", () => {
+    expect(resolvePeriod("last_6_months", today, "2026-11-12")).toEqual({ startDate: "2026-05-13", endDate: "2026-11-12" });
+    expect(resolvePeriod("last_3_months", today, "2026-11-12")).toEqual({ startDate: "2026-08-13", endDate: "2026-11-12" });
+    expect(resolvePeriod("last_30_days", today, "2026-11-12")).toEqual({ startDate: "2026-10-14", endDate: "2026-11-12" });
+  });
+
+  it("covers exactly the days it says: 30 days is 30 days", () => {
+    const span = resolvePeriod("last_30_days", today, "2026-11-12");
+    expect(daysInclusive(span.startDate, span.endDate)).toBe(30);
+  });
+
+  it("clamps at a month end: Aug 31 minus 6 months starts after Feb 28", () => {
+    expect(resolvePeriod("last_6_months", "2026-09-05", "2026-08-31")).toEqual({ startDate: "2026-03-01", endDate: "2026-08-31" });
+  });
+
+  it("crosses a year boundary and a leap day", () => {
+    expect(resolvePeriod("last_6_months", "2027-02-02", "2027-01-28")).toEqual({ startDate: "2026-07-29", endDate: "2027-01-28" });
+    // 3 months before May 29 2024 is Feb 29 2024 (a leap day), so the window starts the next day.
+    expect(resolvePeriod("last_3_months", "2024-05-31", "2024-05-29").startDate).toBe("2024-03-01");
   });
 });
 
