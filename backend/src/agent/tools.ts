@@ -1,12 +1,13 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { requireHub } from "../config/hubs";
+import { HUBS, requireHub } from "../config/hubs";
 import { HAZARDS } from "../config/scoring";
 import { toIsoDate } from "../data/dateRange";
 import type { Db } from "../data/db";
 import { getDailyWeather, getLatestWeatherDate } from "../data/weatherRepository";
 import { explainHubRisk } from "../scoring/explain";
-import { getHubRisk } from "../scoring/hubRiskService";
+import { computeHubRanks } from "../scoring/hubRanks";
+import { getAllHubRisks, getHubRisk } from "../scoring/hubRiskService";
 import { buildRankingView } from "../scoring/rankingView";
 import type { HubRisk } from "../scoring/types";
 import { computePercentOfDays, computeSnowfallTotal, resolvePeriod, type StatsPeriod } from "../scoring/weatherStats";
@@ -35,6 +36,18 @@ function round(value: number, digits = 2): number {
   return Math.round(value * factor) / factor;
 }
 
+// One rounding rule for every measurement, so the same snowfall never shows as 24.5 in one tool and 24.48 in another.
+// Yearly event frequencies are small numbers where the second decimal matters (0.18 hurricanes a year).
+function roundMeasurement(value: number, unit: string): number {
+  return round(value, unit === "events/yr" ? 2 : 1);
+}
+
+// Where the hub stands among all the hubs: the comparison an analyst needs when deciding where to invest.
+function loadHubRanks(db: Db, hubId: string) {
+  const ranks = computeHubRanks(hubId, getAllHubRisks(db, HUBS));
+  return { out_of: ranks.out_of, overall: ranks.composite, ...ranks.hazards };
+}
+
 // Shared by the stats tools.
 function loadPeriodWeather({ db, today = new Date() }: ToolContext, hubId: string, period: StatsPeriod) {
   const hub = requireHub(hubId);
@@ -45,13 +58,15 @@ function loadPeriodWeather({ db, today = new Date() }: ToolContext, hubId: strin
 }
 
 // A compact view of a score: enough to explain it, small enough to keep the model focused.
-function toHubRiskView(risk: HubRisk) {
+function toHubRiskView(risk: HubRisk, rankAmongHubs: ReturnType<typeof loadHubRanks>) {
   return {
     hub_id: risk.hubId,
     hub: risk.hubName,
     region: risk.region,
     composite_score: risk.compositeScore,
     dominant_hazard: risk.dominantHazard,
+    // 1 = most exposed of the hubs; equal scores share a rank.
+    rank_among_hubs: rankAmongHubs,
     sub_scores: Object.fromEntries(
       HAZARDS.map((hazard) => {
         const subScore = risk.subScores[hazard];
@@ -62,7 +77,7 @@ function toHubRiskView(risk: HubRisk) {
             weight: subScore.weight,
             metrics: subScore.metrics.map((metric) => ({
               name: metric.label,
-              value: round(metric.rawValue),
+              value: roundMeasurement(metric.rawValue, metric.unit),
               unit: metric.unit,
               score: metric.score,
             })),
@@ -80,9 +95,9 @@ export const AGENT_TOOLS: AgentTool[] = [
   defineTool({
     name: "get_hub_risk",
     description:
-      "Get one hub's weather-disruption risk: composite score (0-100), the five hazard sub-scores (winter, flood, hurricane, heat, wind) and the measurements behind each.",
+      "Get one hub's weather-disruption risk: composite score (0-100), the five hazard sub-scores (winter, flood, hurricane, heat, wind), the measurements behind each, and where the hub ranks among all the hubs (overall and per hazard).",
     inputSchema: getHubRiskInput,
-    run: ({ hub }, { db }) => toHubRiskView(getHubRisk(db, requireHub(hub))),
+    run: ({ hub }, { db }) => toHubRiskView(getHubRisk(db, requireHub(hub)), loadHubRanks(db, hub)),
   }),
 
   defineTool({
@@ -103,8 +118,8 @@ export const AGENT_TOOLS: AgentTool[] = [
       const riskA = getHubRisk(db, requireHub(hub_a));
       const riskB = getHubRisk(db, requireHub(hub_b));
       return {
-        hub_a: toHubRiskView(riskA),
-        hub_b: toHubRiskView(riskB),
+        hub_a: toHubRiskView(riskA, loadHubRanks(db, hub_a)),
+        hub_b: toHubRiskView(riskB, loadHubRanks(db, hub_b)),
         per_hazard: HAZARDS.map((hazard) => ({
           hazard,
           [riskA.hubId]: riskA.subScores[hazard].score,
@@ -150,8 +165,9 @@ export const AGENT_TOOLS: AgentTool[] = [
         hub: risk.hubName,
         composite_score: risk.compositeScore,
         dominant_hazard: risk.dominantHazard,
+        rank_among_hubs: loadHubRanks(db, hub),
         hazard_scores: Object.fromEntries(HAZARDS.map((hazard) => [hazard, risk.subScores[hazard].score])),
-        top_contributors: explainHubRisk(risk).map((item) => ({ ...item, rawValue: round(item.rawValue) })),
+        top_contributors: explainHubRisk(risk).map((item) => ({ ...item, rawValue: roundMeasurement(item.rawValue, item.unit) })),
         data_window: `${risk.windowStart} to ${risk.windowEnd}`,
         data_gaps: risk.dataGaps,
       };

@@ -116,10 +116,18 @@ export function groundAnswer(
 
   // A figure labelled as a score that repeats a score already shown in the ranking only adds clutter.
   const rankingScores = ranking.map((entry) => entry.score);
-  const figures = answer.figures.filter(
+  const distinctFigures = answer.figures.filter(
     (figure) => !(/score/i.test(figure.unit) && rankingScores.some((score) => Math.abs(score - figure.value) < TOLERANCE)),
   );
-  if (figures.length < answer.figures.length) corrections.push(`dropped ${answer.figures.length - figures.length} figure(s) that repeat ranking scores`);
+  if (distinctFigures.length < answer.figures.length) {
+    corrections.push(`dropped ${answer.figures.length - distinctFigures.length} figure(s) that repeat ranking scores`);
+  }
+
+  // The model lists the most important numbers first, so the cut keeps those.
+  const figures = distinctFigures.slice(0, AGENT_CONFIG.maxFigures);
+  if (figures.length < distinctFigures.length) {
+    corrections.push(`kept the first ${AGENT_CONFIG.maxFigures} figures, trimmed ${distinctFigures.length - figures.length}`);
+  }
 
   let confidence = answer.confidence;
   if (confidence === "high" && hasNearTie(ranking)) {

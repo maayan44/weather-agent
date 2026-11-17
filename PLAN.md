@@ -119,6 +119,13 @@ Done when: `npm run eval` prints pass/fail and a curl to `/chat` returns a valid
    (b) the input was too small/hidden: large 96 px input on an empty chat that shrinks to a slim bar once chatting (A), plus an
    "Ask the agent about any hub..." bar at the top of the Overview that opens the chat with the keyboard ready (B).
    Measured at 430x932, 375x667 and 1280x800; 70 frontend tests. Uncommitted.
+1d. Fixes from the second live answer (Chicago half year): (1) hub tools now return the hub's rank among the 10 (overall and per hazard,
+   ties share a rank) and the agent states it; (2) the existing-hub note goes in the first sentence; (3) at most 6 figures, enforced in code;
+   (4) "1 days" -> "1 day" in the app and copied text; (5) one rounding rule for measurements (24.5 everywhere).
+   Found while verifying: the answer paragraph called a winter-less half year "little weather stress" with the warning only in collapsed
+   sections, so code now appends the partial-period warning when a period under a year was used and the paragraph lacks it, and the eval
+   checks the visible paragraph ("summary"), not the bullets. Also: graceful SIGTERM shutdown (Railway's "crash" on redeploy was the old
+   container being stopped). 216 backend + 73 frontend tests; evals 12/12 on Haiku. Uncommitted.
 2. Deploy: frontend on Vercel, connect it to the Railway backend deployed in session 1. DONE: https://weather-agent-theta-ten.vercel.app
    (checked in a real browser: 10 hubs load from Railway, no console errors). Still to do: set FRONTEND_ORIGIN on Railway to this address.
 3. Bonus if time allows: voice first, then alerts (scheduled rescoring that diffs against the last stored score)

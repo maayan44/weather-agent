@@ -157,6 +157,10 @@ Railway builds from the GitHub repo and redeploys on every push to `main`.
 | `DB_PATH` | `/data/weather.db` |
 | `FRONTEND_ORIGIN` | the Vercel URL, once the frontend exists (until then any origin is allowed) |
 
+Redeploys: Railway stops the old version with SIGTERM when the new one is ready. The server shuts down cleanly on that signal
+(finishes running requests, closes the database, exits 0), so the deploy does not show a "crash". A leftover `npm warn config production`
+line in the logs is a harmless deprecation notice from Railway's own setup.
+
 Do not set `NODE_ENV=production`: the build needs the TypeScript compiler, which is a dev dependency.
 Do not set `PORT`: Railway provides it.
 

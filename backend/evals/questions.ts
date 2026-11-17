@@ -6,7 +6,8 @@ import type { Hazard } from "../src/config/scoring";
 // not what it happens to do. Expected numbers are never hardcoded: the runner asks the scoring
 // engine at run time, so the set keeps working as the 12-month window moves.
 
-type AnswerField = "answer" | "assumptions" | "data_gaps" | "anywhere";
+// "summary" is only the paragraph a phone shows first; "answer" also counts the reasoning bullets behind it.
+type AnswerField = "summary" | "answer" | "assumptions" | "data_gaps" | "anywhere";
 
 export type Check =
   // The agent used this tool. `input` lists only the arguments that must match.
@@ -205,8 +206,10 @@ export const EVAL_CASES: EvalCase[] = [
         ask: "Summarize the past half year of weather in Chicago so I'll know if I should open a new hub over there",
         checks: [
           { kind: "calls_tool", tool: ["get_weather_stats", "get_snowfall_total"], input: { hub: "chicago", period: "last_6_months" } },
-          { kind: "mentions", anyOf: ["season", "winter"], in: "anywhere" },
-          { kind: "mentions", anyOf: ["already", "existing", "one of our"], in: "anywhere" },
+          // The reader sees this paragraph first, so the warning must be in it, not only in a collapsed section.
+          { kind: "mentions", anyOf: ["season", "winter", "full year", "12-month"], in: "summary" },
+          // In the answer text itself, not buried in a data-gap bullet: it reframes the question.
+          { kind: "mentions", anyOf: ["already", "existing", "one of our"], in: "summary" },
           { kind: "all_figures_grounded" },
         ],
       },
@@ -222,6 +225,8 @@ export const EVAL_CASES: EvalCase[] = [
         checks: [
           { kind: "calls_tool", tool: ["get_hub_risk", "explain_score"] },
           { kind: "ranking_has_scores", hub: "chicago", metrics: ["composite", "winter", "flood", "hurricane", "heat", "wind"] },
+          // How the hub compares with the others is what an investment decision rests on.
+          { kind: "mentions", anyOf: ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "of 10", "of the 10", "most exposed", "highest", "ranks"], in: "summary" },
           { kind: "all_figures_grounded" },
         ],
       },

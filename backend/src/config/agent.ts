@@ -13,6 +13,8 @@ export const AGENT_CONFIG = {
   maxToolRounds: 6,
   // How many times the agent may be asked to fix an answer that quotes numbers no tool returned.
   maxGroundingRetries: 1,
+  // Too many numbers bury the decision on a phone screen: the prompt asks for this many, and code enforces it.
+  maxFigures: 6,
   // Scores this close are a tie: used by the prompt, the answer check and the evals.
   tiePoints: 3,
 };

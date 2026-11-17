@@ -80,6 +80,33 @@ describe("groundAnswer: figures that repeat the ranking", () => {
   });
 });
 
+describe("groundAnswer: the limit on figures", () => {
+  const figures = (count: number) => Array.from({ length: count }, (_, index) => ({ label: `number ${index + 1}`, value: index + 20, unit: "days" }));
+  const toolNumbers = [{ values: Array.from({ length: 12 }, (_, index) => index + 20) }];
+
+  it("keeps the first 6 and says what it trimmed", () => {
+    const result = groundAnswer(makeAnswer({ figures: figures(9) }), toolNumbers, lookup);
+    expect(result.answer.figures.map((figure) => figure.label)).toEqual(["number 1", "number 2", "number 3", "number 4", "number 5", "number 6"]);
+    expect(result.corrections).toContain("kept the first 6 figures, trimmed 3");
+  });
+
+  it("leaves exactly 6 alone", () => {
+    const result = groundAnswer(makeAnswer({ figures: figures(6) }), toolNumbers, lookup);
+    expect(result.answer.figures).toHaveLength(6);
+    expect(result.corrections).toEqual([]);
+  });
+
+  it("drops repeated scores first, then applies the limit to what is left", () => {
+    const answer = makeAnswer({
+      ranking: [entry("minneapolis", 85, 1)],
+      figures: [{ label: "winter score", value: 85, unit: "score (0-100)" }, ...figures(6)],
+    });
+    const result = groundAnswer(answer, [{ ...toolNumbers[0], score: 85 }], lookup);
+    expect(result.answer.figures).toHaveLength(6); // the repeated score was removed, so nothing real was trimmed
+    expect(result.corrections).toEqual(["dropped 1 figure(s) that repeat ranking scores"]);
+  });
+});
+
 describe("groundAnswer: numbers in the answer text", () => {
   it("flags a number in the text that no tool returned", () => {
     const answer = makeAnswer({ answer: "Denver had snow on 99.5% of days." });

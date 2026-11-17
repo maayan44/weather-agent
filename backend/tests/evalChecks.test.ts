@@ -145,6 +145,13 @@ describe("mentions", () => {
     expect(passes({ kind: "mentions", anyOf: ["county"], in: "data_gaps" }, run)).toBe(true);
   });
 
+  it("summary looks only at the visible paragraph, not at the reasoning behind it", () => {
+    const hidden = makeRun({ answer: "Chicago had little weather stress.", reasoning: ["The window misses winter."] });
+    expect(passes({ kind: "mentions", anyOf: ["winter"], in: "summary" }, hidden)).toBe(false);
+    expect(passes({ kind: "mentions", anyOf: ["winter"], in: "answer" }, hidden)).toBe(true); // "answer" also counts the bullets
+    expect(passes({ kind: "mentions", anyOf: ["winter"], in: "summary" }, makeRun({ answer: "This misses winter." }))).toBe(true);
+  });
+
   it("fails when the word is only in another field", () => {
     expect(passes({ kind: "mentions", anyOf: ["county"], in: "assumptions" }, run)).toBe(false);
     expect(passes({ kind: "mentions", anyOf: ["county"], in: "anywhere" }, run)).toBe(true);

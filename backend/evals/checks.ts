@@ -19,6 +19,7 @@ type Field = Extract<Check, { kind: "mentions" }>["in"];
 
 function textOf(answer: AgentAnswer, field: Field): string {
   const parts: Record<Field, string[]> = {
+    summary: [answer.answer],
     answer: [answer.answer, ...answer.reasoning],
     assumptions: answer.assumptions,
     data_gaps: answer.data_gaps,

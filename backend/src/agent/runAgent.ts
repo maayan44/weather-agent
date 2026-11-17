@@ -4,6 +4,7 @@ import { toIsoDate } from "../data/dateRange";
 import { getHubScore } from "../scoring/hubRiskService";
 import { declinedAnswer } from "./answers";
 import { extractNumbers, groundAnswer } from "./groundAnswer";
+import { needsPartialPeriodNote, PARTIAL_PERIOD_NOTE } from "./periodWarning";
 import { agentAnswerSchema, type AgentAnswer } from "./schemas";
 import { buildSystemPrompt } from "./systemPrompt";
 import { API_TOOLS, runTool, type ToolContext } from "./tools";
@@ -115,6 +116,11 @@ export async function runAgent({ message, history = [], callModel, context, toda
       dataGaps.push(`The explanation mentions ${unverifiedTextNumbers.join(", ")}, which is not a direct tool result; treat it as approximate.`);
       corrections.push(`unverified numbers in text: ${unverifiedTextNumbers.join(", ")}`);
     }
-    return { answer: { ...answer, data_gaps: dataGaps }, toolCalls, corrections, usage };
+    let answerText = answer.answer;
+    if (needsPartialPeriodNote(toolCalls, answerText)) {
+      answerText = `${answerText} ${PARTIAL_PERIOD_NOTE}`;
+      corrections.push("added a warning that the period leaves out seasons");
+    }
+    return { answer: { ...answer, answer: answerText, data_gaps: dataGaps }, toolCalls, corrections, usage };
   }
 }

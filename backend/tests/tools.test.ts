@@ -61,6 +61,42 @@ describe("rank_hubs", () => {
   });
 });
 
+describe("where a hub stands among the hubs", () => {
+  it("get_hub_risk says how the hub ranks overall and per hazard (1 = most exposed)", () => {
+    const result = run("get_hub_risk", { hub: "phoenix" });
+    expect(result.rank_among_hubs).toMatchObject({ out_of: 10, heat: 1 });
+    expect(Object.keys(result.rank_among_hubs)).toEqual(["out_of", "overall", "winter", "flood", "hurricane", "heat", "wind"]);
+  });
+
+  it("explain_score and compare_hubs carry the same ranks", () => {
+    expect(run("explain_score", { hub: "minneapolis" }).rank_among_hubs.winter).toBe(1);
+    const compared = run("compare_hubs", { hub_a: "miami", hub_b: "houston" });
+    expect(compared.hub_a.rank_among_hubs.hurricane).toBe(1);
+    expect(compared.hub_b.rank_among_hubs.out_of).toBe(10);
+  });
+});
+
+describe("one rounding rule for measurements", () => {
+  it("rounds measurements to one decimal, so a snowfall total matches the snowfall tool", () => {
+    const db = createSeededDb();
+    db.prepare("UPDATE daily_weather SET snowfall_inches = 24.48 WHERE hub_id = 'chicago' AND date = '2026-01-05'").run();
+    const withSnow = { db, today: new Date("2026-11-17T12:00:00Z") };
+
+    const viaRisk: any = runTool("get_hub_risk", { hub: "chicago" }, withSnow).output;
+    const viaTotal: any = runTool("get_snowfall_total", { hub: "chicago", period: "last_12_months" }, withSnow).output;
+    const snowMetric = viaRisk.sub_scores.winter.metrics.find((metric: any) => metric.name === "Total snowfall");
+    expect(snowMetric.value).toBe(24.5);
+    expect(viaTotal.totalSnowfallInches).toBe(24.5);
+  });
+
+  it("keeps two decimals for yearly event frequencies, where 0.18 hurricanes a year matters", () => {
+    const db = createSeededDb();
+    db.prepare("UPDATE hub_hazards SET hurricane_annual_frequency = 0.18361 WHERE hub_id = 'houston'").run();
+    const result: any = runTool("get_hub_risk", { hub: "houston" }, { db, today: new Date("2026-11-17T12:00:00Z") }).output;
+    expect(result.sub_scores.hurricane.metrics[0].value).toBe(0.18);
+  });
+});
+
 describe("compare_hubs", () => {
   it("compares two hubs hazard by hazard", () => {
     const result = run("compare_hubs", { hub_a: "miami", hub_b: "houston" });

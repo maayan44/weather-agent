@@ -13,6 +13,9 @@ export const STATS_PERIODS = [
 ] as const;
 export type StatsPeriod = (typeof STATS_PERIODS)[number];
 
+// Periods shorter than a year miss seasons: a summer-and-autumn window has no winter at all.
+export const PARTIAL_YEAR_PERIODS: readonly StatsPeriod[] = ["last_30_days", "last_3_months", "last_6_months", "year_to_date"];
+
 export interface DateSpan {
   startDate: string;
   endDate: string;
