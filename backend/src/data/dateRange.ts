@@ -1,4 +1,5 @@
 import { ARCHIVE_LAG_DAYS, RECENT_REFETCH_DAYS } from "../config/dataSources";
+import { SCORING_WINDOW_DAYS } from "../config/scoring";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -21,13 +22,13 @@ export function daysInclusive(startDate: string, endDate: string): number {
   return Math.round((Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / MS_PER_DAY) + 1;
 }
 
-// From Dec 1 two years back: covers "last calendar year", "last 12 months" and "last winter" even in January.
-export function getFirstWantedDate(today: Date): string {
-  return `${today.getUTCFullYear() - 2}-12-01`;
-}
-
 export function getLastAvailableDate(today: Date): string {
   return toIsoDate(new Date(today.getTime() - ARCHIVE_LAG_DAYS * MS_PER_DAY));
+}
+
+// The 3-year scoring window also covers "last calendar year", "last 12 months" and "last winter".
+export function getFirstWantedDate(today: Date): string {
+  return addDays(getLastAvailableDate(today), -(SCORING_WINDOW_DAYS - 1));
 }
 
 export function getWantedRange(today: Date): DateWindow {

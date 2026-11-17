@@ -211,7 +211,7 @@ export const EVAL_CASES: EvalCase[] = [
         checks: [
           { kind: "calls_tool", tool: ["get_weather_stats", "get_snowfall_total"], input: { hub: "chicago", period: "last_6_months" } },
           // The reader sees this paragraph first, so the warning must be in it, not only in a collapsed section.
-          { kind: "mentions", anyOf: ["season", "winter", "full year", "12-month"], in: "summary" },
+          { kind: "mentions", anyOf: ["season", "winter", "full year", "12-month", "3-year"], in: "summary" },
           // In the answer text itself, not buried in a data-gap bullet: it reframes the question.
           { kind: "mentions", anyOf: ["already", "existing", "one of our"], in: "summary" },
           { kind: "no_false_claims", hub: "chicago" },

@@ -62,7 +62,7 @@ export function Overview({ onAsk, onOpenAsk }: OverviewProps) {
           )}
 
           <p className="px-1 pt-2 text-sm text-muted-foreground">
-            Exposure scores come from the last 12 months of weather history and FEMA hazard records. They are not forecasts, cost
+            Exposure scores come from a 3-year average of weather history and FEMA hazard records. They are not forecasts, cost
             estimates or investment advice. Tap a hub to ask why.
           </p>
         </div>

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { HAZARD_CONFIG, HAZARDS, type MetricId } from "../src/config/scoring";
+import { HAZARD_CONFIG, HAZARDS, SCORING_WINDOW_DAYS, type MetricId } from "../src/config/scoring";
 import { getHub } from "../src/config/hubs";
 import { addDays } from "../src/data/dateRange";
 import { openDatabase, type Db } from "../src/data/db";
@@ -76,23 +76,31 @@ describe("scoring config", () => {
 
 describe("metric extractors", () => {
   it("counts days at or above each threshold (boundaries included)", () => {
-    const weather = makeWeather(4, (index) => [
-      { windGustMph: 40 },
-      { windGustMph: 39.9 },
-      { windGustMph: 50 },
-      { windGustMph: 10 },
-    ][index]);
+    // 365 days = exactly one year, so a count is already a per-year figure.
+    const weather = makeWeather(365, (index) => [{ windGustMph: 40 }, { windGustMph: 39.9 }, { windGustMph: 50 }][index] ?? {});
     const input = { weather, hazards: NO_HAZARDS };
     expect(METRIC_EXTRACTORS.gustDays(input)).toBe(2);
     expect(METRIC_EXTRACTORS.severeGustDays(input)).toBe(1);
   });
 
   it("sums snowfall and counts freezing days", () => {
-    const weather = makeWeather(3, (index) => [{ snowfallInches: 1.5, tempMaxF: 32 }, { snowfallInches: 0.5, tempMaxF: 33 }, {}][index]);
+    const weather = makeWeather(365, (index) => [{ snowfallInches: 1.5, tempMaxF: 32 }, { snowfallInches: 0.5, tempMaxF: 33 }][index] ?? {});
     const input = { weather, hazards: NO_HAZARDS };
     expect(METRIC_EXTRACTORS.totalSnowfall(input)).toBe(2);
     expect(METRIC_EXTRACTORS.snowDays(input)).toBe(1);
     expect(METRIC_EXTRACTORS.freezingDays(input)).toBe(1);
+  });
+
+  it("turns counts into per-year figures: 3 years with 3 snow days is 1 a year", () => {
+    const weather = makeWeather(SCORING_WINDOW_DAYS, (index) => (index < 3 ? { snowfallInches: 2 } : {}));
+    const input = { weather, hazards: NO_HAZARDS };
+    expect(METRIC_EXTRACTORS.snowDays(input)).toBeCloseTo(1, 10);
+    expect(METRIC_EXTRACTORS.totalSnowfall(input)).toBeCloseTo(2, 10);
+  });
+
+  it("scales by the days actually available, so a data gap does not look like calm weather", () => {
+    const weather = makeWeather(Math.floor(SCORING_WINDOW_DAYS / 2), (index) => (index < 3 ? { snowfallInches: 2 } : {}));
+    expect(METRIC_EXTRACTORS.snowDays({ weather, hazards: NO_HAZARDS })).toBeCloseTo(2, 1);
   });
 
   it("passes FEMA frequencies through unchanged", () => {
@@ -107,7 +115,7 @@ describe("metric extractors", () => {
 describe("sub-scores", () => {
   it("averages the winter metrics (hand-computed)", () => {
     // 6 snow days of 2 in, all freezing: 50 (6/12 days), 30 (12/40 in), 8.571 (6/70 days) -> mean 29.524
-    const weather = makeWeather(10, (index) => (index < 6 ? { snowfallInches: 2, tempMaxF: 30 } : {}));
+    const weather = makeWeather(365, (index) => (index < 6 ? { snowfallInches: 2, tempMaxF: 30 } : {}));
     const winter = computeSubScore("winter", { weather, hazards: NO_HAZARDS });
     expect(winter.score).toBeCloseTo(29.5238, 3);
     expect(winter.metrics.map((metric) => metric.rawValue)).toEqual([6, 12, 6]);
@@ -128,7 +136,7 @@ describe("sub-scores", () => {
 
 describe("computeHubRisk", () => {
   const phoenix = getHub("phoenix")!;
-  const fullYear = 365;
+  const fullYear = SCORING_WINDOW_DAYS;
 
   it("scores a perfectly quiet hub at 0", () => {
     const risk = computeHubRisk(phoenix, { weather: makeWeather(fullYear), hazards: NO_HAZARDS });
@@ -163,7 +171,7 @@ describe("computeHubRisk", () => {
     expect(risk.windowStart).toBe("2025-01-01");
     expect(risk.windowEnd).toBe("2025-04-10");
     expect(risk.daysOfData).toBe(100);
-    expect(risk.dataGaps[0]).toContain("100 of 365");
+    expect(risk.dataGaps[0]).toContain("100 of 1095");
   });
 
   it("is deterministic and ignores the order of the input days", () => {
@@ -219,12 +227,12 @@ describe("hub risk service", () => {
     db = openDatabase(":memory:");
   });
 
-  it("scores only the newest 365 days of the cache", () => {
-    saveDailyWeather(db, makeWeather(400).map((day) => ({ ...day, hubId: "denver" })));
+  it("scores only the newest 3 years of the cache", () => {
+    saveDailyWeather(db, makeWeather(SCORING_WINDOW_DAYS + 35).map((day) => ({ ...day, hubId: "denver" })));
     saveHubHazards(db, [{ ...NO_HAZARDS, hubId: "denver" }], new Date());
     const risk = getHubRisk(db, getHub("denver")!);
-    expect(risk.daysOfData).toBe(365);
-    expect(risk.windowEnd).toBe(addDays("2025-01-01", 399));
+    expect(risk.daysOfData).toBe(SCORING_WINDOW_DAYS);
+    expect(risk.windowEnd).toBe(addDays("2025-01-01", SCORING_WINDOW_DAYS + 34));
     expect(risk.windowStart).toBe(addDays("2025-01-01", 35));
   });
 

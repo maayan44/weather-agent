@@ -104,7 +104,7 @@ the browser-to-server hop; the model call dominates response time.
 - Each hazard averages a few metrics. A metric maps a raw value to 0-100 between two fixed anchors.
 - Composite = weighted sum. Weights: winter 0.25, flood 0.20, hurricane 0.20, heat 0.20, wind 0.15.
 - Hurricane comes only from FEMA. Wind comes only from Open-Meteo gusts. They never overlap.
-- All numbers live in `backend/src/config/scoring.ts`. Window: the newest 365 days of data.
+- All numbers live in `backend/src/config/scoring.ts`. Window: the newest 3 years (1,095 days) of data. Day counts and snowfall are averaged to per-year figures first, so the anchors mean "per year".
 
 ## 5. Assumptions, limitations and uncertainty
 
@@ -112,16 +112,16 @@ the browser-to-server hop; the model call dominates response time.
 |---|---|---|
 | Hub list | 10 hubs, one point each (metro center). Includes a low-risk control (Los Angeles) | Not the real hub addresses. Results describe the metro area. |
 | Weights | winter highest, wind lowest. Judgment call, not measured | Changing them changes the ranking. They are config. |
-| Thresholds | Chosen by looking at the last year of data for these 10 hubs | Fixed anchors, but still a judgment call. |
+| Thresholds | Chosen by looking at one year of data for these 10 hubs (per-year anchors) | Fixed anchors, but still a judgment call. |
 | Composite | A weighted average hides single extreme hazards | Answers show the dominant hazard next to the composite. |
 | Weather source | Open-Meteo archive (a coarse reanalysis model, not stations) | Gust data likely understates extremes (Denver looks calm). |
-| Weather window | Dec 1 two years back to today minus 5 days (archive delay) | Covers "last year" and "last winter" even in January. Calendar periods follow today's date; scores use the newest 365 days. Answers report how many days of a period are missing. |
+| Weather window | The newest 3 years (1,095 days) ending today minus 5 days (archive delay) | Covers "last year" and "last winter" even in January. Calendar periods follow today's date; scores are per-year averages over the 3 years. Answers report how many days of a period are missing. |
 | Snow day | Snowfall of 0.1 in or more (stats questions); 1 in or more (risk score) | Different questions use different definitions, stated in the answer. |
-| "Last winter" | Dec 1 to the end of Feb, the most recent finished winter | Data starts Jan 1 of last year, so older winters are not available. |
+| "Last winter" | Dec 1 to the end of Feb, the most recent finished winter | Only the newest 3 years are stored, so older winters are not available. |
 | FEMA data | County-level, historical event frequency, not a forecast | Same value for the whole county. Used frequency, not FEMA's risk score, because the score is weighted by property value and every large county reads "Very High". A snapshot (2026-11-17) is bundled as a fallback if FEMA is unreachable. |
 | Not applicable | FEMA "not applicable" (e.g. hurricanes in Denver) is stored as 0 | Means "no recorded events", not "perfectly safe". |
 | Scope | No forecasts, wildfire, earthquake or hubs outside the list | The agent must decline these questions. |
-| Single year | Scores reflect one 12-month window | One unusual year (e.g. dry Denver winter) can distort a score. |
+| 3-year average | Scores average the newest 3 years | A big storm every 2 years is seen, but events rarer than 3 years and trends inside the window are not. A day over a threshold counts the same however extreme it was. |
 | LLM | Claude Opus 5.5, medium effort. The model name is an env var | Wording can vary between runs. Numbers cannot, because code checks them. |
 | Eval coverage | 10 cases; `--repeat` measures flakiness; checks with a stale precondition show as skipped. Checks cover structure and numbers, not wording | Passing does not prove every answer reads well. Keyword checks (e.g. "tie") can miss a correct answer worded differently. |
 | Number checks | A figure is accepted if its value appears in any tool result | A made-up figure that happens to equal another number in the results (e.g. a rank of 3) still passes. |

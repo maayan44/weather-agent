@@ -13,13 +13,14 @@ describe("daysInclusive", () => {
 });
 
 describe("wanted range", () => {
-  it("starts on Dec 1 two years back so 'last winter' is covered even in January", () => {
-    expect(getFirstWantedDate(today)).toBe("2024-12-01");
-    expect(getFirstWantedDate(new Date("2027-01-03T00:00:00Z"))).toBe("2025-12-01");
+  it("starts 3 years (1095 days) before the last available day, which also covers 'last winter'", () => {
+    expect(getFirstWantedDate(today)).toBe("2023-11-14");
+    expect(getFirstWantedDate(new Date("2027-01-03T00:00:00Z"))).toBe("2023-12-31");
+    expect(daysInclusive(getFirstWantedDate(today), "2026-11-12")).toBe(1095);
   });
 
   it("ends 5 days ago because of the archive delay", () => {
-    expect(getWantedRange(today)).toEqual({ startDate: "2024-12-01", endDate: "2026-11-12" });
+    expect(getWantedRange(today)).toEqual({ startDate: "2023-11-14", endDate: "2026-11-12" });
   });
 });
 

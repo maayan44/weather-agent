@@ -1,10 +1,10 @@
 import { PARTIAL_YEAR_PERIODS } from "../scoring/weatherStats";
 
 export const PARTIAL_PERIOD_NOTE =
-  "Note: this period is shorter than a year, so it can leave out seasons such as winter; the 12-month scores show the full picture.";
+  "Note: this period is shorter than a year, so it can leave out seasons such as winter; the 3-year average scores show the full picture.";
 
 // Any sign in the answer that the reader is told about missing seasons or looking at a full year.
-const ALREADY_WARNS = /season|winter|full year|12[- ]month|twelve months/i;
+const ALREADY_WARNS = /season|winter|full year|12[- ]month|3[- ]year|twelve months/i;
 
 interface ToolCall {
   input: unknown;

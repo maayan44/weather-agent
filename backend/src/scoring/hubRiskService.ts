@@ -7,7 +7,7 @@ import { getDailyWeather, getLatestWeatherDate } from "../data/weatherRepository
 import { computeHubRisk } from "./hubRisk";
 import type { HubRisk, RankingKey } from "./types";
 
-// Reads the cache and scores one hub over the newest 365 days available for it.
+// Reads the cache and scores one hub over the newest 3 years available for it.
 export function getHubRisk(db: Db, hub: Hub): HubRisk {
   const windowEnd = getLatestWeatherDate(db, hub.id);
   if (!windowEnd) throw new Error(`No cached weather for ${hub.name}. Run the ingestion first.`);

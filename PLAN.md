@@ -12,10 +12,10 @@ TASK.txt and README.txt are read-only. Do not edit them.
 | 2 | LLM | Claude via the Anthropic SDK, tool use + structured output |
 | 3 | Scoring | Deterministic formula in code. The LLM never computes or invents numbers. |
 | 4 | Hubs | 10 US hubs, coordinates and region in a config file |
-| 5 | Weather data | Open-Meteo (historical archive, last 12 months to today): snowfall, precipitation, wind speed/gusts, temperature |
+| 5 | Weather data | Open-Meteo (historical archive, newest 3 years): snowfall, precipitation, wind speed/gusts, temperature |
 | 6 | Hurricane + flood data | FEMA National Risk Index (county-level ratings) |
 | 6b | FEMA fields used | Annualized **frequency** (HRCN/CFLD/IFLD_AFREQ), not FEMA risk scores. Verified live: scores are property-value weighted, so big counties all read "Very High" and hubs can't be told apart. Nulls = not applicable = 0. Inland flood is `IFLD` in this NRI version. |
-| 6c | Weather window | Jan 1 of last year to today minus 5 days (archive lag), local time, US units. Covers both "last year" and "last 12 months". |
+| 6c | Weather window | The newest 3 years (1,095 days) ending today minus 5 days (archive lag), local time, US units, one request per hub. Scores are per-year averages over this window; it also covers "last year", "last 12 months" and "last winter". Chosen because one year is noisy: a hub with a big storm every 2nd year would swing between high and low. |
 | 7 | Storage | SQLite: weather cache, hub scores history, conversations |
 | 8 | Deploy | Backend on Railway (Render is the fallback), frontend on Vercel |
 | 9 | Voice | Bonus only, last priority |
@@ -130,6 +130,15 @@ Done when: `npm run eval` prints pass/fail and a curl to `/chat` returns a valid
    all six scores and each hub rank ("1st of 10 hubs"); the card labels hazards High/Moderate/Low (bands 50 / 25) and says when the overall
    score understates a high hazard. 226 backend + 88 frontend tests; evals 12/12 on Haiku. Uncommitted.
 1f. No false claims (user: "no false information in any answers"): found in a live answer ("winter, its third-ranked hazard" when it is second). New `claimVerifier.ts` checks ranking/order statements in the answer, reasoning, assumptions and data gaps against the engine; a wrong one goes back to the model once, then the code rewrites it with the true fact (or drops the sentence). Prompt rule added (hub rank vs order of one hub's hazards; include the 12-month figures when a short period is used). New eval check `no_false_claims` on the 3 profile-style cases. 257 backend tests; evals on Haiku 9/9 over 3 repeats. Limit: only phrasings it can read with confidence are checked.
+1g. 3-year scoring window (user: a rare big storm every ~2 years should not make a score swing): the cache now holds 3 years (checked live: one Open-Meteo request per hub, 10 hubs in about 6 s, DB about 1.1 MB). Day counts and snowfall are averaged to per-year figures over the days actually available (units "days/yr", "in/yr"), so the 0-100 anchors are unchanged. Prompt, data-gap text, partial-period note and Overview text say "3-year average". Limit: events rarer than 3 years, and trends inside the window, are not captured; one day over a threshold counts the same however extreme. 259 backend + 88 frontend tests. Evals NOT yet re-run (costs API). Uncommitted. Existing deploys backfill the extra years automatically on the next startup.
+
+### Next planned (agreed with Maayan)
+- Send guard: ignore a send while one is in flight (hero input, example chips, retry), with a test.
+- Each hub's hazards ordered by their points in that hub, not a fixed global order.
+- Source and period attached to each figure by code, not written by the model.
+- Small UI polish: "Used: tool" line from tools_used, 3 example questions, calmer layout around the input, Ask as the default tab.
+- Skipped for now: the closed Overview sidebar (Overview stays pinned on wide screens).
+
 2. Deploy: frontend on Vercel, connect it to the Railway backend deployed in session 1. DONE: https://weather-agent-theta-ten.vercel.app
    (checked in a real browser: 10 hubs load from Railway, no console errors). Still to do: set FRONTEND_ORIGIN on Railway to this address.
 3. Bonus if time allows: voice first, then alerts (scheduled rescoring that diffs against the last stored score)
