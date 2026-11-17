@@ -1,13 +1,13 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { getHubsByRegion, HUBS, requireHub } from "../config/hubs";
+import { requireHub } from "../config/hubs";
 import { HAZARDS } from "../config/scoring";
 import { toIsoDate } from "../data/dateRange";
 import type { Db } from "../data/db";
 import { getDailyWeather, getLatestWeatherDate } from "../data/weatherRepository";
 import { explainHubRisk } from "../scoring/explain";
-import { getAllHubRisks, getHubRisk } from "../scoring/hubRiskService";
-import { rankHubs } from "../scoring/ranking";
+import { getHubRisk } from "../scoring/hubRiskService";
+import { buildRankingView } from "../scoring/rankingView";
 import type { HubRisk } from "../scoring/types";
 import { computePercentOfDays, computeSnowfallTotal, resolvePeriod, type StatsPeriod } from "../scoring/weatherStats";
 import { compareHubsInput, explainScoreInput, getHubRiskInput, getSnowfallTotalInput, getWeatherStatsInput, rankHubsInput } from "./schemas";
@@ -90,23 +90,7 @@ export const AGENT_TOOLS: AgentTool[] = [
     description:
       "Rank hubs from highest to lowest risk. Optionally limit to one region and/or rank by one hazard (for example winter in the Midwest). Use this for 'which hubs are most exposed' questions.",
     inputSchema: rankHubsInput,
-    run: ({ region, hazard }, { db }) => {
-      const hubs = region ? getHubsByRegion(region) : HUBS;
-      const rankingKey = hazard ?? "composite";
-      return {
-        ranked_by: rankingKey,
-        region: region ?? "all regions",
-        ranking: rankHubs(getAllHubRisks(db, hubs), rankingKey).map(({ rank, score, risk }) => ({
-          rank,
-          hub_id: risk.hubId,
-          hub: risk.hubName,
-          score,
-          composite_score: risk.compositeScore,
-          dominant_hazard: risk.dominantHazard,
-          hazard_scores: Object.fromEntries(HAZARDS.map((hazard) => [hazard, risk.subScores[hazard].score])),
-        })),
-      };
-    },
+    run: ({ region, hazard }, { db }) => buildRankingView(db, region, hazard),
   }),
 
   defineTool({

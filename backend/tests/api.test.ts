@@ -4,6 +4,7 @@ import { createModelCaller } from "../src/agent/llmClient";
 import { createApp } from "../src/app";
 import { openDatabase } from "../src/data/db";
 import { AgentError, type ModelCaller, type ModelTurn } from "../src/agent/types";
+import { runTool } from "../src/agent/tools";
 import { createSeededDb } from "./helpers/seedDatabase";
 import { answerTurn, makeAnswer, scriptedModel, toolUseTurn } from "./helpers/scriptedModel";
 import { getJson, postJson, startTestServer } from "./helpers/testServer";
@@ -264,5 +265,45 @@ describe("GET /hubs", () => {
   it("still lists the 10 hubs", async () => {
     const { baseUrl } = await start();
     expect((await getJson(`${baseUrl}/hubs`)).body.hubs).toHaveLength(10);
+  });
+});
+
+describe("GET /ranking", () => {
+  it("returns the overall ranking with each hub's dominant hazard, without calling the model", async () => {
+    const { baseUrl, requests } = await start();
+    const { status, body } = await getJson(`${baseUrl}/ranking`);
+    expect(status).toBe(200);
+    expect(body.ranked_by).toBe("composite");
+    expect(body.ranking).toHaveLength(10);
+    expect(body.ranking[0]).toMatchObject({ rank: 1, hub_id: expect.any(String), dominant_hazard: expect.anything() });
+    expect(body.data_window).toBe("2025-11-13 to 2026-11-12");
+    expect(requests).toHaveLength(0);
+  });
+
+  it("ranks one region by one hazard, highest first", async () => {
+    const { baseUrl } = await start();
+    const { body } = await getJson(`${baseUrl}/ranking?region=Midwest&hazard=winter`);
+    expect(body.ranking.map((row: any) => row.hub)).toEqual(["Minneapolis", "Chicago", "Detroit"]);
+    expect(body.ranking[0].score).toBeGreaterThan(body.ranking[1].score);
+  });
+
+  it("matches what the agent's rank_hubs tool returns", async () => {
+    const { baseUrl } = await start();
+    const viaEndpoint = (await getJson(`${baseUrl}/ranking?region=Midwest&hazard=winter`)).body;
+    const viaTool = runTool("rank_hubs", { region: "Midwest", hazard: "winter" }, { db: createSeededDb() }).output;
+    expect(viaEndpoint).toEqual(viaTool);
+  });
+
+  it("rejects an unknown hazard or region with a 400", async () => {
+    const { baseUrl } = await start();
+    expect((await getJson(`${baseUrl}/ranking?hazard=tornado`)).status).toBe(400);
+    expect((await getJson(`${baseUrl}/ranking?region=Atlantis`)).status).toBe(400);
+  });
+
+  it("answers 503 while data is still loading", async () => {
+    const { baseUrl } = await start({ emptyDb: true });
+    const { status, body } = await getJson(`${baseUrl}/ranking`);
+    expect(status).toBe(503);
+    expect(body.code).toBe("data_loading");
   });
 });

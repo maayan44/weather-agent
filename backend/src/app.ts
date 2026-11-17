@@ -9,6 +9,7 @@ import { createChatRateLimiter } from "./middleware/rateLimit";
 import { createChatRouter } from "./routes/chat";
 import { createConversationsRouter } from "./routes/conversations";
 import { createHealthRouter } from "./routes/health";
+import { createRankingRouter } from "./routes/ranking";
 import { hubsRouter } from "./routes/hubs";
 
 export interface AppDependencies {
@@ -33,6 +34,7 @@ export function createApp({
 
   app.use(createHealthRouter(db));
   app.use(hubsRouter);
+  app.use(createRankingRouter(db));
   // Per-client limit first, so one noisy client cannot use up the shared daily budget.
   const limits = [createChatRateLimiter(chatRateLimitPerMinute), createDailyLimit(chatDailyLimit)];
   app.use(createChatRouter({ db, callModel, limits }));
