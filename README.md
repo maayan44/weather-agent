@@ -16,7 +16,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the design. [PLAN.md](PLAN.md) has th
 | Eval questions (10, spec only) | Done: `backend/evals/questions.ts` |
 | First live Claude call | Done |
 | API endpoint + conversation history + load data on startup | Done, checked live |
-| Backend skeleton on Railway | Not started |
+| Backend on Railway | Done: live and checked, data survives redeploys |
 | Eval runner (`npm run eval`) | Done: 10/10 cases pass on live Claude |
 | Chat UI, frontend deploy | Session 2 |
 
@@ -114,6 +114,34 @@ npm run eval -- --only midwest-winter     # run one or more cases (comma separat
 - What it checks: the right tool and arguments, the right hubs in the ranking, numbers backed by tool results, declining
   out-of-scope questions, honest confidence and ties. Expected scores are read from the scoring engine at run time, never hardcoded.
 - What it does not check: how well the answer is worded. Results can vary a little between runs.
+
+## Deployment (Railway)
+
+Live backend: https://weather-agent-production-5786e20f.up.railway.app (try `/health` and `/hubs`).
+
+Railway builds from the GitHub repo and redeploys on every push to `main`.
+
+| Setting | Value |
+|---|---|
+| Source | GitHub repo `maayan44/weather-agent`, branch `main` |
+| Root Directory | `backend` |
+| Build / Start | `npm run build` / `npm start` |
+| Healthcheck path | `/health` |
+| Region | EU West (Amsterdam) |
+| Volume | mounted at `/data` (keeps the SQLite file between deploys) |
+
+| Variable | Value |
+|---|---|
+| `ANTHROPIC_API_KEY` | your key, set only in Railway |
+| `ANTHROPIC_MODEL` | `claude-haiku-5-5` (cheap, passes all 10 evals) |
+| `DB_PATH` | `/data/weather.db` |
+| `FRONTEND_ORIGIN` | the Vercel URL, once the frontend exists (until then any origin is allowed) |
+
+Do not set `NODE_ENV=production`: the build needs the TypeScript compiler, which is a dev dependency.
+Do not set `PORT`: Railway provides it.
+
+Checked on the live server: data loads itself on first start, a two-turn chat with follow-up works, and a saved
+conversation was still there after a redeploy.
 
 ## Run the frontend
 

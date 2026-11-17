@@ -98,7 +98,7 @@ Order changed during the work (agreed with Maayan):
 | 5a | Eval questions (spec only) | Done |
 | 5b | First live Claude call (`npm run ask`) | Done: schema accepted, right tool, correct ranking, no corrections needed |
 | 6 | API endpoint + conversation history + ingest on startup | Done, checked live (fresh DB, 2-turn chat, reload) |
-| 6a | Deploy backend skeleton to Railway (with a volume) | Not started |
+| 6a | Deploy backend skeleton to Railway (with a volume) | Done: live, chat + follow-up checked, data survives a redeploy |
 | 7 | Eval runner: one command, pass/fail | Done: 10/10 cases, 32/32 checks on live Claude |
 
 Done when: `npm run eval` prints pass/fail and a curl to `/chat` returns a valid structured answer.

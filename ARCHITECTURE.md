@@ -87,6 +87,17 @@ Why SQLite:
 On Railway, attach a volume to keep the file between deploys. Without one, the data is simply re-downloaded.
 Postgres would be the next step for many users or hubs. It is not needed here.
 
+## Deployment
+
+| Part | Where | Notes |
+|---|---|---|
+| Backend + SQLite | Railway, EU West (Amsterdam) | Builds from GitHub `main`. A volume at `/data` holds the database. |
+| Frontend | Vercel (session 2) | Calls the backend over HTTPS. CORS is limited by `FRONTEND_ORIGIN`. |
+| Secrets | Railway variables | The API key is never in the repo. `.env` is git-ignored. |
+
+On a fresh deploy the server fills an empty database in the background (about 5 seconds). Region choice only affects
+the browser-to-server hop; the model call dominates response time.
+
 ## 4. Scoring (how risk is decided)
 
 - 5 hazards: winter, flood, hurricane, heat, wind. Each is 0-100.
