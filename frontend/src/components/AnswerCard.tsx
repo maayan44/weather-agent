@@ -5,7 +5,7 @@ import { CopyButton } from "@/components/CopyButton";
 import { ScoreBar } from "@/components/ScoreBar";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatAnswerAsText, groupRanking } from "@/lib/answerText";
+import { asHubProfile, formatAnswerAsText, groupRanking } from "@/lib/answerText";
 import { formatScore, hubLabel, metricLabel } from "@/lib/hazards";
 
 function BulletList({ items }: { items: string[] }) {
@@ -52,6 +52,7 @@ export function AnswerCard({ answer }: { answer: AgentAnswer }) {
   if (!answer.in_scope) return <OutOfScopeCard answer={answer} />;
 
   const groups = groupRanking(answer.ranking);
+  const profile = asHubProfile(groups);
   const hubNotes = answer.ranking.filter((entry) => entry.note).map((entry) => `${hubLabel(entry.hub_id)}: ${entry.note}`);
   const why = [...answer.reasoning, ...hubNotes];
   // For a statistics question the numbers are the answer, so they are shown up front instead of folded away.
@@ -62,14 +63,24 @@ export function AnswerCard({ answer }: { answer: AgentAnswer }) {
       <CardContent className="space-y-4">
         <p className="text-[1.0625rem] leading-relaxed">{answer.answer}</p>
 
-        {groups.map(({ metric, entries }) => (
-          <section key={metric} aria-label={`${metricLabel(metric)} score`} className="space-y-3">
-            <h3 className="text-sm font-semibold text-muted-foreground">{metricLabel(metric)} score (0-100, higher = more exposed)</h3>
-            {entries.map((entry) => (
-              <ScoreBar key={`${metric}-${entry.hub_id}`} label={hubLabel(entry.hub_id)} value={entry.score} />
+        {profile ? (
+          // One hub, several scores: a single card with a bar per score, overall first.
+          <section aria-label={`${hubLabel(profile.hubId)} scores`} className="space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground">{hubLabel(profile.hubId)} scores (0-100, higher = more exposed)</h3>
+            {profile.entries.map((entry) => (
+              <ScoreBar key={entry.metric} label={metricLabel(entry.metric)} value={entry.score} />
             ))}
           </section>
-        ))}
+        ) : (
+          groups.map(({ metric, entries }) => (
+            <section key={metric} aria-label={`${metricLabel(metric)} score`} className="space-y-3">
+              <h3 className="text-sm font-semibold text-muted-foreground">{metricLabel(metric)} score (0-100, higher = more exposed)</h3>
+              {entries.map((entry) => (
+                <ScoreBar key={`${metric}-${entry.hub_id}`} label={hubLabel(entry.hub_id)} value={entry.score} />
+              ))}
+            </section>
+          ))
+        )}
 
         {numbersAreTheAnswer && <KeyNumbers figures={answer.figures} />}
 

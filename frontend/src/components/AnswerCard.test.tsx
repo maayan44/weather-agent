@@ -26,6 +26,21 @@ describe("AnswerCard", () => {
     expect(within(screen.getByRole("region", { name: "Flood score" })).getByRole("meter", { name: /Houston/ })).toBeInTheDocument();
   });
 
+  it("shows one hub as a single profile card: overall first, then each hazard, with no per-score sections", () => {
+    const profile = [
+      { rank: 1, hub_id: "chicago", metric: "composite" as const, score: 36.3, note: "" },
+      { rank: 1, hub_id: "chicago", metric: "wind" as const, score: 79.2, note: "" },
+      { rank: 1, hub_id: "chicago", metric: "winter" as const, score: 59.9, note: "" },
+      { rank: 1, hub_id: "chicago", metric: "flood" as const, score: 44, note: "" },
+    ];
+    render(<AnswerCard answer={makeAnswer({ answer: "Chicago is mostly exposed to wind.", ranking: profile })} />);
+
+    const card = screen.getByRole("region", { name: "Chicago scores" });
+    const bars = within(card).getAllByRole("meter").map((bar) => bar.getAttribute("aria-label"));
+    expect(bars).toEqual(["Overall: 36.3 out of 100", "Wind: 79.2 out of 100", "Winter: 59.9 out of 100", "Flood: 44 out of 100"]);
+    expect(screen.queryByRole("region", { name: "Wind score" })).not.toBeInTheDocument();
+  });
+
   it("offers Why, Assumptions and Data gaps, and opens them on tap", async () => {
     const user = userEvent.setup();
     render(
