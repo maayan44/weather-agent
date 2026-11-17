@@ -1,197 +1,78 @@
 # Weather Risk Intelligence Agent
 
 A chat agent that helps analysts decide which of 10 US logistics hubs are most exposed to weather disruption.
-The risk score comes from a fixed formula in code. The LLM only picks tools and explains the results.
+The risk score comes from a fixed formula in code. The LLM only picks tools and explains their results.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the design. [PLAN.md](PLAN.md) has the 2-session plan.
+**Live app:** https://weather-agent-theta-ten.vercel.app
+(backend: https://weather-agent-production-5786e20f.up.railway.app/health)
 
-## Status
+Design: [ARCHITECTURE.md](ARCHITECTURE.md).
 
-| Part | State |
-|---|---|
-| Backend scaffold + 10 hubs config | Done |
-| Data layer (Open-Meteo, FEMA, SQLite cache) | Done |
-| Scoring engine (5 sub-scores + composite) | Done |
-| Agent (6 tools + JSON schema + answer checks) | Done and working live with Claude |
-| Eval questions (10, spec only) | Done: `backend/evals/questions.ts` |
-| First live Claude call | Done |
-| API endpoint + conversation history + load data on startup | Done, checked live |
-| Backend on Railway | Done: live and checked, data survives redeploys |
-| Eval runner (`npm run eval`) | Done: 12/12 cases pass on live Claude (12 questions: the first 10 plus 2 from real user feedback) |
-| `GET /ranking` endpoint (no AI call) | Done |
-| Chat UI (mobile first) + Overview screen | Built and tested locally; not deployed yet |
-| Frontend deploy on Vercel | Done: https://weather-agent-theta-ten.vercel.app (loads, reads the backend, no console errors) |
+## Run it locally
 
-## Requirements
-
-- Node.js 22 or newer
-- An Anthropic API key (only needed to talk to the agent, not for scoring or tests)
-
-## Setup
+Needs Node.js 22+ and an Anthropic API key (the key is only needed for chat, not for scoring or tests).
 
 ```bash
+# 1. Backend (http://localhost:3000)
 cd backend
 npm install
-cp .env.example .env     # then fill in ANTHROPIC_API_KEY
+cp .env.example .env      # fill in ANTHROPIC_API_KEY
+npm run dev               # downloads weather + FEMA data on first start (~10 s)
+
+# 2. Frontend (http://localhost:5173), in a second terminal
+cd frontend
+npm install
+cp .env.example .env      # VITE_API_URL, default http://localhost:3000
+npm run dev
 ```
 
-### Environment variables (`backend/.env`)
+Until the first download finishes, chat answers "data is still loading".
+
+Backend settings (`backend/.env`):
 
 | Variable | Meaning | Default |
 |---|---|---|
-| `PORT` | API port | `3000` |
-| `ANTHROPIC_API_KEY` | Your Claude API key | none (required for the agent) |
-| `ANTHROPIC_MODEL` | Claude model the agent uses | `claude-opus-5-5` |
-| `DB_PATH` | SQLite file location | `./data/weather.db` |
-| `FRONTEND_ORIGIN` | Allowed CORS origin (the Vercel URL in production) | `*` |
+| `ANTHROPIC_API_KEY` | Claude API key | required for chat |
+| `ANTHROPIC_MODEL` | Model the agent uses | `claude-opus-5-5` |
+| `DB_PATH` | SQLite file | `./data/weather.db` |
+| `FRONTEND_ORIGIN` | Allowed browser origin (CORS) | `*` |
 
-## Run the backend
+## Tests and evals
 
 ```bash
 cd backend
-npm run ingest    # first time: downloads weather + FEMA data into SQLite (~10 seconds)
-npm run dev       # starts the API with auto-reload
+npm test                                   # unit tests, no network or API key
+npm run eval                               # 12 questions on live Claude, PASS/FAIL per case
+npm run eval -- --only midwest-winter      # only some cases (comma-separated ids)
+npm run eval -- --repeat 3                 # repeat to find flaky cases
 ```
 
-On startup the server downloads any missing data in the background (about 5-10 seconds when the database is empty),
-so `npm run ingest` is optional. Until it finishes, `/chat` answers `503 data_loading`.
+`cd frontend && npm test` runs the UI tests.
 
-Check it works: `curl localhost:3000/health` and `curl localhost:3000/hubs`.
+Evals call real Claude: about 50 cents for a full run on the default model, about 3 cents with
+`ANTHROPIC_MODEL=claude-haiku-5-5`. The cases are in `backend/evals/questions.ts`. Expected numbers are
+read from the scoring engine at run time, never hardcoded.
 
-### API
+Ask from the terminal: `npm run ask -- "Which Midwest hubs are most exposed to winter disruption?"`
+
+## API
 
 | Endpoint | What it does |
 |---|---|
-| `GET /health` | `{"status":"ok","data_ready":true}`. `data_ready` is false while the first download runs. |
-| `GET /hubs` | The 10 hubs with coordinates and regions |
-| `GET /ranking?hazard=&region=` | The ranking the Overview screen shows. Same numbers the agent uses, but no AI call, so it is instant and free. `hazard` is winter, flood, hurricane, heat or wind; leave it out for the overall score. |
-| `POST /chat` | Body: `{"message": "...", "conversation_id": "optional"}`. Returns `conversation_id`, the structured `answer`, and `meta` (tools used, corrections, token usage). |
-| `GET /conversations/:id` | The saved turns of a conversation, so the UI can restore it after a reload |
+| `POST /chat` | `{"message": "...", "conversation_id": "optional"}` returns the structured answer and a `conversation_id` for follow-ups |
+| `GET /ranking?hazard=&region=` | The ranking the Overview shows: same engine, no AI call |
+| `GET /hubs` | The 10 hubs |
+| `GET /conversations/:id` | A saved conversation (restores the chat after a reload) |
+| `GET /health` | `data_ready` is false while the first download runs |
 
-```bash
-curl -X POST localhost:3000/chat -H "content-type: application/json" \
-  -d '{"message":"Which hubs in the Midwest are most exposed to winter disruption?"}'
-```
+Errors are `{"error": "...", "code": "..."}`. Limits: 10 chats per minute per client, 300 per day in total,
+1000 characters per message.
 
-Send the returned `conversation_id` with the next message to ask follow-up questions. Ids are issued by the
-server (random UUIDs); an id the server never issued returns 404. Messages in one conversation run one at a time.
+## Deployment
 
-Errors always look like `{"error": "...", "code": "..."}`:
-
-| Code | Status | Meaning |
+| Part | Where | Settings |
 |---|---|---|
-| `invalid_request` | 400 | Bad body or id (the message says which field) |
-| `not_found` | 404 | Unknown conversation |
-| `payload_too_large` | 413 | Body over 10 KB |
-| `rate_limited` | 429 | Over 10 chats per minute from this client |
-| `daily_limit_reached` | 429 | Over 300 chats today across all clients (protects the credits) |
-| `data_loading` | 503 | First data download still running |
-| `ai_busy` | 503 | Claude is rate limited, retry shortly |
-| `agent_failed` | 502 | The agent could not produce a valid answer |
-| `ai_unavailable` | 502 | Claude unreachable or no API key on the server |
+| Backend | Railway, from GitHub `main` | Root `backend`, volume at `/data`, `DB_PATH=/data/weather.db`, `ANTHROPIC_MODEL=claude-haiku-5-5`, `FRONTEND_ORIGIN` = the Vercel URL |
+| Frontend | Vercel, from GitHub `main` | Root `frontend`, `VITE_API_URL` = the Railway URL |
 
-Limits: 1000 characters per message, 60 seconds per Claude call (retried once).
-
-Production build: `npm run build` then `npm start`.
-
-## Try the agent from the terminal
-
-Needs `ANTHROPIC_API_KEY` in `backend/.env` and a filled cache (`npm run ingest`).
-
-```bash
-cd backend
-npm run ask -- "Which Midwest hubs are most exposed to winter disruption?"
-```
-
-It prints the structured JSON answer, the tools used, and token counts.
-
-## Run the tests
-
-```bash
-cd backend
-npm test          # unit tests, no network and no API key needed
-npm run typecheck
-```
-
-## Run the evals
-
-```bash
-cd backend
-npm run eval                              # all 12 questions: prints PASS/FAIL per case and a summary
-npm run eval -- --verbose                 # also shows every passing check
-npm run eval -- --only midwest-winter     # run one or more cases (comma separated ids)
-npm run eval -- --repeat 3                # run everything 3 times and report which cases are flaky
-```
-
-Cheap runs: put `ANTHROPIC_MODEL=claude-haiku-5-5` in front (about 3 cents per full run instead of about 50 cents).
-
-- The 12 questions and their checks are in `backend/evals/questions.ts`.
-- Needs `ANTHROPIC_API_KEY`. It fills an empty data cache by itself.
-- Calls real Claude. A full run uses about 150,000 tokens, roughly 60 cents to a dollar on the default model (estimate).
-- Full answers are saved to `backend/evals/results/latest.json` (not committed), so a failure can be read without paying for a re-run.
-- Exit code is 1 if any case fails, so it can run in CI.
-- What it checks: the right tool and arguments, the right hubs in the ranking, numbers backed by tool results, declining
-  out-of-scope questions, honest confidence and ties. Expected scores are read from the scoring engine at run time, never hardcoded.
-- A check whose precondition no longer holds (e.g. the data stopped showing a tie) is reported as `skip`, not as a pass.
-- What it does not check: how well the answer is worded. Results can vary a little between runs; use `--repeat`.
-
-## Deployment (Railway)
-
-Live backend: https://weather-agent-production-5786e20f.up.railway.app (try `/health` and `/hubs`).
-
-Railway builds from the GitHub repo and redeploys on every push to `main`.
-
-| Setting | Value |
-|---|---|
-| Source | GitHub repo `maayan44/weather-agent`, branch `main` |
-| Root Directory | `backend` |
-| Build / Start | `npm run build` / `npm start` |
-| Healthcheck path | `/health` |
-| Region | EU West (Amsterdam) |
-| Volume | mounted at `/data` (keeps the SQLite file between deploys) |
-
-| Variable | Value |
-|---|---|
-| `ANTHROPIC_API_KEY` | your key, set only in Railway |
-| `ANTHROPIC_MODEL` | `claude-haiku-5-5` (cheap, passes all 12 evals) |
-| `DB_PATH` | `/data/weather.db` |
-| `FRONTEND_ORIGIN` | the Vercel URL, once the frontend exists (until then any origin is allowed) |
-
-Redeploys: Railway stops the old version with SIGTERM when the new one is ready. The server shuts down cleanly on that signal
-(finishes running requests, closes the database, exits 0), so the deploy does not show a "crash". A leftover `npm warn config production`
-line in the logs is a harmless deprecation notice from Railway's own setup.
-
-Do not set `NODE_ENV=production`: the build needs the TypeScript compiler, which is a dev dependency.
-Do not set `PORT`: Railway provides it.
-
-Checked on the live server: data loads itself on first start, a two-turn chat with follow-up works, and a saved
-conversation was still there after a redeploy.
-
-## Run the frontend
-
-The chat app is in `frontend/` (React, Vite, TypeScript, Tailwind CSS and shadcn/ui). It is designed for phones first,
-then widens to a two-column layout on a computer.
-
-```bash
-cd frontend
-npm install
-cp .env.example .env      # VITE_API_URL: where the backend runs (default http://localhost:3000)
-npm run dev               # opens on http://localhost:5173
-```
-
-Start the backend too (`cd backend && npm run dev`), so the Overview has data and chat can answer.
-
-| Command | What it does |
-|---|---|
-| `npm run dev` | Dev server with live reload |
-| `npm test` | 53 tests: the answer card, composer, API client, error messages and whole-app flows. No network, no AI. |
-| `npm run typecheck` | TypeScript check |
-| `npm run build` | Production build into `dist/` |
-
-### Deploy on Vercel
-Live app: https://weather-agent-theta-ten.vercel.app
-
-1. In Vercel, create a project from the GitHub repo `maayan44/weather-agent`.
-2. Set **Root Directory** to `frontend`. The framework (Vite) is detected automatically.
-3. Add the variable `VITE_API_URL` = the Railway address (`https://weather-agent-production-5786e20f.up.railway.app`).
-4. After the first deploy, set `FRONTEND_ORIGIN` on Railway to the Vercel address, so only your site can call the API from a browser.
+Don't set `NODE_ENV=production` on Railway: the build needs dev dependencies.
