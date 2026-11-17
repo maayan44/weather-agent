@@ -1,10 +1,12 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { AGENT_CONFIG } from "../config/agent";
 import { toIsoDate } from "../data/dateRange";
-import { getHubScore } from "../scoring/hubRiskService";
+import { HUBS } from "../config/hubs";
+import { getAllHubRisks, getHubScore } from "../scoring/hubRiskService";
 import { declinedAnswer } from "./answers";
 import { extractNumbers, groundAnswer } from "./groundAnswer";
 import { needsPartialPeriodNote, PARTIAL_PERIOD_NOTE } from "./periodWarning";
+import { completeHubProfile, findProfileHub } from "./profileCompletion";
 import { agentAnswerSchema, type AgentAnswer } from "./schemas";
 import { buildSystemPrompt } from "./systemPrompt";
 import { API_TOOLS, runTool, type ToolContext } from "./tools";
@@ -121,6 +123,15 @@ export async function runAgent({ message, history = [], callModel, context, toda
       answerText = `${answerText} ${PARTIAL_PERIOD_NOTE}`;
       corrections.push("added a warning that the period leaves out seasons");
     }
-    return { answer: { ...answer, answer: answerText, data_gaps: dataGaps }, toolCalls, corrections, usage };
+    // A hub profile is completed from the engine: all six scores, each with the hub's rank among the hubs.
+    let ranking = answer.ranking;
+    if (findProfileHub(ranking)) {
+      const completed = completeHubProfile(ranking, getAllHubRisks(context.db, HUBS));
+      if (completed) {
+        ranking = completed.ranking;
+        if (completed.added > 0) corrections.push(`completed the hub profile: added ${completed.added} score(s)`);
+      }
+    }
+    return { answer: { ...answer, answer: answerText, ranking, data_gaps: dataGaps }, toolCalls, corrections, usage };
   }
 }

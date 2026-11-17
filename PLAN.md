@@ -126,6 +126,9 @@ Done when: `npm run eval` prints pass/fail and a curl to `/chat` returns a valid
    sections, so code now appends the partial-period warning when a period under a year was used and the paragraph lacks it, and the eval
    checks the visible paragraph ("summary"), not the bullets. Also: graceful SIGTERM shutdown (Railway's "crash" on redeploy was the old
    container being stopped). 216 backend + 73 frontend tests; evals 12/12 on Haiku. Uncommitted.
+1e. Hub profile completed by code (user: show the extra risk in a specific hub even when the overall score is moderate): the engine fills in
+   all six scores and each hub rank ("1st of 10 hubs"); the card labels hazards High/Moderate/Low (bands 50 / 25) and says when the overall
+   score understates a high hazard. 226 backend + 88 frontend tests; evals 12/12 on Haiku. Uncommitted.
 2. Deploy: frontend on Vercel, connect it to the Railway backend deployed in session 1. DONE: https://weather-agent-theta-ten.vercel.app
    (checked in a real browser: 10 hubs load from Railway, no console errors). Still to do: set FRONTEND_ORIGIN on Railway to this address.
 3. Bonus if time allows: voice first, then alerts (scheduled rescoring that diffs against the last stored score)

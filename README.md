@@ -190,6 +190,7 @@ Start the backend too (`cd backend && npm run dev`), so the Overview has data an
 
 ### What the screens show
 - **Overview**: all 10 hubs ranked, with each hub's main hazard. An "Ask the agent about any hub…" bar sits at the top (phones), so the AI agent is visible on the first screen; tapping it opens the chat with the keyboard ready. A filter ranks by winter, flood, hurricane, heat or wind. It calls no AI. Tapping a hub asks the agent why.
+- **Hub profile card**: a question about one hub shows overall plus all five hazards, each with the hub's rank among the 10 ("1st of 10 hubs") and a High / Moderate / Low label (High 50+, Moderate 25-49, Low under 25). When the overall score is moderate but a hazard is high, a note says so: "The overall score averages five hazards, so it understates Wind (79.2) and Winter (59.9)." The code, not the AI, fills in missing scores and ranks from the scoring engine.
 - **Ask**: the chat. On an empty chat the input is large and central (96 px, with example questions below); once a conversation starts it shrinks to a slim bar at the bottom. Each answer shows the ranking bars, a confidence level in words, and collapsible **Why**, **Assumptions** and **Data gaps and limits** sections, plus a **Copy answer** button. A declined question (another city, a forecast) is shown as a plain notice.
 - The conversation is remembered in the browser, so a reload brings it back. **New chat** starts fresh.
 

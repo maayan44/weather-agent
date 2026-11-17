@@ -210,6 +210,8 @@ export const EVAL_CASES: EvalCase[] = [
           { kind: "mentions", anyOf: ["season", "winter", "full year", "12-month"], in: "summary" },
           // In the answer text itself, not buried in a data-gap bullet: it reframes the question.
           { kind: "mentions", anyOf: ["already", "existing", "one of our"], in: "summary" },
+          // The code completes a hub profile from the engine, so the card always shows all six scores.
+          { kind: "ranking_has_scores", hub: "chicago", metrics: ["composite", "winter", "flood", "hurricane", "heat", "wind"] },
           { kind: "all_figures_grounded" },
         ],
       },
