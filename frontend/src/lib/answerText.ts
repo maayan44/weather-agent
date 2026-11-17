@@ -1,5 +1,5 @@
 import type { AgentAnswer, ScoreMetric } from "@/api/types";
-import { formatScore, hubLabel, metricLabel } from "./hazards";
+import { formatScore, formatUnit, hubLabel, metricLabel } from "./hazards";
 
 // Ranking entries arrive grouped by score; this keeps the groups in the order the model gave them.
 export function groupRanking(ranking: AgentAnswer["ranking"]) {
@@ -48,7 +48,7 @@ export function formatAnswerAsText(answer: AgentAnswer): string {
   return [
     answer.answer,
     ...ranking,
-    ...section("Key numbers", answer.figures.map((figure) => `${figure.label}: ${formatScore(figure.value)} ${figure.unit}`.trim())),
+    ...section("Key numbers", answer.figures.map((figure) => `${figure.label}: ${formatScore(figure.value)} ${formatUnit(figure.value, figure.unit)}`.trim())),
     ...section("Why", answer.reasoning),
     ...section("Assumptions", answer.assumptions),
     ...section("Data gaps and limits", answer.data_gaps),

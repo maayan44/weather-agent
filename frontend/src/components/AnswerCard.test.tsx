@@ -74,6 +74,12 @@ describe("AnswerCard", () => {
     expect(screen.queryByRole("button", { name: /Key numbers/ })).not.toBeInTheDocument();
   });
 
+  it("writes a count of exactly one with the singular unit", () => {
+    render(<AnswerCard answer={makeAnswer({ answer: "One windy day.", figures: [{ label: "Gust days", value: 1, unit: "days" }, { label: "Rain days", value: 7, unit: "days" }] })} />);
+    expect(screen.getByText("day")).toBeInTheDocument();
+    expect(screen.getByText("days")).toBeInTheDocument();
+  });
+
   it("folds the numbers away when there is a ranking to show", () => {
     render(<AnswerCard answer={makeAnswer({ ranking: winterRanking, figures: [{ label: "Snow days", value: 33, unit: "days" }] })} />);
     expect(screen.getByRole("button", { name: "Key numbers (1)" })).toBeInTheDocument();

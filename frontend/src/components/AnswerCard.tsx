@@ -6,7 +6,7 @@ import { ScoreBar } from "@/components/ScoreBar";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent } from "@/components/ui/card";
 import { asHubProfile, formatAnswerAsText, groupRanking } from "@/lib/answerText";
-import { formatScore, hubLabel, metricLabel } from "@/lib/hazards";
+import { formatScore, formatUnit, hubLabel, metricLabel } from "@/lib/hazards";
 
 function BulletList({ items }: { items: string[] }) {
   return (
@@ -25,7 +25,7 @@ function KeyNumbers({ figures }: { figures: AgentAnswer["figures"] }) {
         <div key={figure.label} className="flex items-baseline justify-between gap-4 py-2.5">
           <dt className="text-base">{figure.label}</dt>
           <dd className="shrink-0 font-semibold tabular-nums">
-            {formatScore(figure.value)} <span className="font-normal text-muted-foreground">{figure.unit}</span>
+            {formatScore(figure.value)} <span className="font-normal text-muted-foreground">{formatUnit(figure.value, figure.unit)}</span>
           </dd>
         </div>
       ))}

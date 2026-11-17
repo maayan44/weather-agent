@@ -29,6 +29,19 @@ export function hubLabel(hubId: string): string {
     .join(" ");
 }
 
+const SINGULAR_UNITS: [RegExp, string][] = [
+  [/\bdays\b/g, "day"],
+  [/\bevents\b/g, "event"],
+  [/\binches\b/g, "inch"],
+  [/\bhours\b/g, "hour"],
+];
+
+// "1 days" reads as a mistake. A value of exactly 1 gets the singular unit; everything else is left as written.
+export function formatUnit(value: number, unit: string): string {
+  if (value !== 1) return unit;
+  return SINGULAR_UNITS.reduce((text, [plural, singular]) => text.replace(plural, singular), unit);
+}
+
 export function formatScore(score: number): string {
   return Number.isInteger(score) ? String(score) : score.toFixed(1);
 }
