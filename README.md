@@ -188,22 +188,6 @@ Start the backend too (`cd backend && npm run dev`), so the Overview has data an
 | `npm run typecheck` | TypeScript check |
 | `npm run build` | Production build into `dist/` |
 
-### What the screens show
-- **Overview**: all 10 hubs ranked, with each hub's main hazard. An "Ask the agent about any hub…" bar sits at the top (phones), so the AI agent is visible on the first screen; tapping it opens the chat with the keyboard ready. A filter ranks by winter, flood, hurricane, heat or wind. It calls no AI. Tapping a hub asks the agent why.
-- **Hub profile card**: a question about one hub shows overall plus all five hazards, each with the hub's rank among the 10 ("1st of 10 hubs") and a High / Moderate / Low label (High 50+, Moderate 25-49, Low under 25). When the overall score is moderate but a hazard is high, a note says so: "The overall score averages five hazards, so it understates Wind (79.2) and Winter (59.9)." The code, not the AI, fills in missing scores and ranks from the scoring engine.
-- **Ask**: the chat. On an empty chat the input is large and central (96 px, with example questions below); once a conversation starts it shrinks to a slim bar at the bottom. Each answer shows the ranking bars, a confidence level in words, and collapsible **Why**, **Assumptions** and **Data gaps and limits** sections, plus a **Copy answer** button. A declined question (another city, a forecast) is shown as a plain notice.
-- The conversation is remembered in the browser, so a reload brings it back. **New chat** starts fresh.
-
-### Icon and logo
-A white storm cloud with an amber warning bolt on a light blue gradient. `frontend/public/favicon.svg` is the single source;
-the PNG sizes (`apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `favicon-32.png`) are rendered from it, and `site.webmanifest`
-makes the app installable ("Add to Home Screen") with this icon. The same file is the logo shown in the app.
-
-### Design rules followed
-Apple's interface guidelines: tap targets at least 44 pt, text at least 16 px (so iPhone Safari does not zoom), the system font, a bottom tab bar,
-light and dark mode that follow the phone, safe-area padding for the notch, Reduce Motion respected, and confidence never shown by color alone.
-Contrast was measured at 4.5:1 or better for text, in both modes.
-
 ### Deploy on Vercel
 Live app: https://weather-agent-theta-ten.vercel.app
 

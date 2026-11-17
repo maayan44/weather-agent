@@ -13,6 +13,9 @@ export type Check =
   // The agent used this tool. `input` lists only the arguments that must match.
   | { kind: "calls_tool"; tool: string | string[]; input?: Record<string, string> }
   | { kind: "in_scope"; value: boolean }
+  // No statement in the explanation about how a hazard or hub ranks contradicts the scoring engine.
+  // `hub` is the hub the answer is about, for sentences that do not name it.
+  | { kind: "no_false_claims"; hub?: string }
   // The ranking holds a score for this hub for every listed metric (a hub profile).
   | { kind: "ranking_has_scores"; hub: string; metrics: (Hazard | "composite")[] }
   // Same set of hubs; the order is already forced to the engine's order by the answer check.
@@ -100,6 +103,7 @@ export const EVAL_CASES: EvalCase[] = [
         checks: [
           { kind: "calls_tool", tool: "explain_score", input: { hub: "dallas" } },
           { kind: "quotes_engine_score", hub: "dallas", metric: "composite" },
+          { kind: "no_false_claims", hub: "dallas" },
           // Different wordings of "this is not actually high risk"; the numeric check above covers the facts.
           { kind: "mentions", anyOf: ["rank", "moderate", "middle", "lower", "not high", "not a high", "isn't high", "is not high", "below"], in: "answer" },
         ],
@@ -210,6 +214,7 @@ export const EVAL_CASES: EvalCase[] = [
           { kind: "mentions", anyOf: ["season", "winter", "full year", "12-month"], in: "summary" },
           // In the answer text itself, not buried in a data-gap bullet: it reframes the question.
           { kind: "mentions", anyOf: ["already", "existing", "one of our"], in: "summary" },
+          { kind: "no_false_claims", hub: "chicago" },
           // The code completes a hub profile from the engine, so the card always shows all six scores.
           { kind: "ranking_has_scores", hub: "chicago", metrics: ["composite", "winter", "flood", "hurricane", "heat", "wind"] },
           { kind: "all_figures_grounded" },
@@ -227,6 +232,7 @@ export const EVAL_CASES: EvalCase[] = [
         checks: [
           { kind: "calls_tool", tool: ["get_hub_risk", "explain_score"] },
           { kind: "ranking_has_scores", hub: "chicago", metrics: ["composite", "winter", "flood", "hurricane", "heat", "wind"] },
+          { kind: "no_false_claims", hub: "chicago" },
           // How the hub compares with the others is what an investment decision rests on.
           { kind: "mentions", anyOf: ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "of 10", "of the 10", "most exposed", "highest", "ranks"], in: "summary" },
           { kind: "all_figures_grounded" },

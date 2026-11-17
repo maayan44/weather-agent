@@ -5,6 +5,7 @@ import { HUBS } from "../config/hubs";
 import { getAllHubRisks, getHubScore } from "../scoring/hubRiskService";
 import { declinedAnswer } from "./answers";
 import { extractNumbers, groundAnswer } from "./groundAnswer";
+import { buildHubFacts, correctClaims, describeClaimProblems, explanationTexts, findClaimProblemsInTexts } from "./claimVerifier";
 import { needsPartialPeriodNote, PARTIAL_PERIOD_NOTE } from "./periodWarning";
 import { completeHubProfile, findProfileHub } from "./profileCompletion";
 import { agentAnswerSchema, type AgentAnswer } from "./schemas";
@@ -50,6 +51,12 @@ function historyToMessages(history: ConversationTurn[]): Anthropic.MessageParam[
 function describeUngrounded(figures: AgentAnswer["figures"]): string {
   const list = figures.map((figure) => `"${figure.label}" = ${figure.value}`).join("; ");
   return `These figures do not appear in any tool result: ${list}. Rewrite your answer using only numbers returned by tools (call a tool if you need one), or remove them.`;
+}
+
+// When every tool call was about one hub, an answer sentence that does not name a hub is about that hub.
+function singleHubInToolCalls(toolCalls: ToolCallRecord[]): string | null {
+  const hubs = new Set(toolCalls.map((call) => (call.input as { hub?: unknown } | null)?.hub).filter((hub): hub is string => typeof hub === "string"));
+  return hubs.size === 1 ? [...hubs][0] : null;
 }
 
 export async function runAgent({ message, history = [], callModel, context, today = new Date() }: RunAgentOptions): Promise<AgentRunResult> {
@@ -98,15 +105,34 @@ export async function runAgent({ message, history = [], callModel, context, toda
     const toolOutputs = toolCalls.flatMap((call) => (call.output === undefined ? [] : [call.output]));
     const grounding = groundAnswer(parsed.data, toolOutputs, lookupScore, promptNumbers);
 
-    if (grounding.ungroundedFigures.length > 0 && groundingRetries < AGENT_CONFIG.maxGroundingRetries) {
+    // Statements about how a hazard or hub ranks are checked against the engine too, not just the numbers.
+    const allRisks = getAllHubRisks(context.db, HUBS);
+    const mainHub = findProfileHub(grounding.answer.ranking) ?? singleHubInToolCalls(toolCalls);
+    const claimProblems = findClaimProblemsInTexts(explanationTexts(grounding.answer), buildHubFacts(allRisks), mainHub);
+
+    const feedback: string[] = [];
+    if (grounding.ungroundedFigures.length > 0) feedback.push(describeUngrounded(grounding.ungroundedFigures));
+    if (claimProblems.length > 0) feedback.push(describeClaimProblems(claimProblems));
+
+    if (feedback.length > 0 && groundingRetries < AGENT_CONFIG.maxGroundingRetries) {
       groundingRetries++;
       messages.push({ role: "assistant", content: turn.content });
-      messages.push({ role: "user", content: describeUngrounded(grounding.ungroundedFigures) });
+      messages.push({ role: "user", content: feedback.join("\n\n") });
       continue;
     }
 
     // Still ungrounded after the retry: drop those figures rather than show a number nothing backs up.
     const { answer, corrections, ungroundedFigures, unverifiedTextNumbers } = grounding;
+    // A ranking claim the engine contradicts is never shown: the engine knows the true fact, so the code writes it in.
+    if (claimProblems.length > 0) {
+      const facts = buildHubFacts(allRisks);
+      const fix = (text: string) => correctClaims(text, facts, mainHub).text;
+      answer.answer = fix(answer.answer);
+      answer.reasoning = answer.reasoning.map(fix).filter((text) => text.length > 0);
+      answer.assumptions = answer.assumptions.map(fix).filter((text) => text.length > 0);
+      answer.data_gaps = answer.data_gaps.map(fix).filter((text) => text.length > 0);
+      corrections.push(`corrected a wrong ranking claim: ${claimProblems.join("; ")}`);
+    }
     const dataGaps = [...answer.data_gaps];
     if (ungroundedFigures.length > 0) {
       answer.figures = answer.figures.filter((figure) => !ungroundedFigures.includes(figure));
@@ -126,7 +152,7 @@ export async function runAgent({ message, history = [], callModel, context, toda
     // A hub profile is completed from the engine: all six scores, each with the hub's rank among the hubs.
     let ranking = answer.ranking;
     if (findProfileHub(ranking)) {
-      const completed = completeHubProfile(ranking, getAllHubRisks(context.db, HUBS));
+      const completed = completeHubProfile(ranking, allRisks);
       if (completed) {
         ranking = completed.ranking;
         if (completed.added > 0) corrections.push(`completed the hub profile: added ${completed.added} score(s)`);

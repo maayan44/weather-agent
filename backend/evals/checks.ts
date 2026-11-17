@@ -1,7 +1,9 @@
 import type { AgentRunResult } from "../src/agent/runAgent";
 import type { AgentAnswer } from "../src/agent/schemas";
 import type { Db } from "../src/data/db";
-import { getHubScore } from "../src/scoring/hubRiskService";
+import { buildHubFacts, explanationTexts, findClaimProblemsInTexts } from "../src/agent/claimVerifier";
+import { HUBS } from "../src/config/hubs";
+import { getAllHubRisks, getHubScore } from "../src/scoring/hubRiskService";
 import type { Check } from "./questions";
 
 export interface CheckResult {
@@ -48,6 +50,8 @@ export function describeCheck(check: Check): string {
       return check.input ? `calls ${toolNames(check.tool)} with ${JSON.stringify(check.input)}` : `calls ${toolNames(check.tool)}`;
     case "in_scope":
       return `in_scope is ${check.value}`;
+    case "no_false_claims":
+      return "no ranking or ordering claim contradicts the scoring engine";
     case "ranking_has_scores":
       return `ranking shows ${check.hub} for: ${check.metrics.join(", ")}`;
     case "ranking_hubs":
@@ -78,6 +82,10 @@ function runCheck(check: Check, run: AgentRunResult, db: Db): { passed: boolean;
     }
     case "in_scope":
       return { passed: answer.in_scope === check.value, detail: `in_scope was ${answer.in_scope}` };
+    case "no_false_claims": {
+      const problems = findClaimProblemsInTexts(explanationTexts(answer), buildHubFacts(getAllHubRisks(db, HUBS)), check.hub ?? null);
+      return { passed: problems.length === 0, detail: problems.length === 0 ? "every ranking claim matches the engine" : problems.join("; ") };
+    }
     case "ranking_has_scores": {
       const shown = answer.ranking.filter((entry) => entry.hub_id === check.hub).map((entry) => entry.metric);
       const missing = check.metrics.filter((metric) => !shown.includes(metric));

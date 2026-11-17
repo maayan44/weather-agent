@@ -129,6 +129,7 @@ Done when: `npm run eval` prints pass/fail and a curl to `/chat` returns a valid
 1e. Hub profile completed by code (user: show the extra risk in a specific hub even when the overall score is moderate): the engine fills in
    all six scores and each hub rank ("1st of 10 hubs"); the card labels hazards High/Moderate/Low (bands 50 / 25) and says when the overall
    score understates a high hazard. 226 backend + 88 frontend tests; evals 12/12 on Haiku. Uncommitted.
+1f. No false claims (user: "no false information in any answers"): found in a live answer ("winter, its third-ranked hazard" when it is second). New `claimVerifier.ts` checks ranking/order statements in the answer, reasoning, assumptions and data gaps against the engine; a wrong one goes back to the model once, then the code rewrites it with the true fact (or drops the sentence). Prompt rule added (hub rank vs order of one hub's hazards; include the 12-month figures when a short period is used). New eval check `no_false_claims` on the 3 profile-style cases. 257 backend tests; evals on Haiku 9/9 over 3 repeats. Limit: only phrasings it can read with confidence are checked.
 2. Deploy: frontend on Vercel, connect it to the Railway backend deployed in session 1. DONE: https://weather-agent-theta-ten.vercel.app
    (checked in a real browser: 10 hubs load from Railway, no console errors). Still to do: set FRONTEND_ORIGIN on Railway to this address.
 3. Bonus if time allows: voice first, then alerts (scheduled rescoring that diffs against the last stored score)
